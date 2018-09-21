@@ -48,11 +48,10 @@ void RedisPhiMatrix::increase(int token_id, int topic_id, float increment) {
 }
 
 void RedisPhiMatrix::increase(int token_id, const std::vector<float>& increment) {
-  std::vector<float> buffer = redis_client_->redis_get(to_key(token_id), topic_size());
-  for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
-    buffer[topic_id] += increment[topic_id];
+  auto key = to_key(token_id);
+  if (!redis_client_->redis_increase(key, increment)) {
+    std::cout << "WARN: Update of token data " << key << " has failed" << std::endl;
   }
-  redis_client_->redis_set(to_key(token_id), buffer);
 }
 
 int RedisPhiMatrix::AddToken(const Token& token) {

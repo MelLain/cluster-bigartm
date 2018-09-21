@@ -10,9 +10,9 @@
 
 class RedisClient {
  public:
-  RedisClient(const std::string& ip, int port, int maxRetries, int numConnections, int timeout)
-      : maxRetries_(maxRetries)
-      , numConnections_(numConnections)
+  RedisClient(const std::string& ip, int port, int max_retries, int num_connections, int timeout)
+      : max_retries_(max_retries)
+      , num_connections_(num_connections)
       , timeout_(timeout)
       , reply_(nullptr)
   {
@@ -30,20 +30,28 @@ class RedisClient {
 
   ~RedisClient() {
     redisFree(context_);
-    if (reply_ != nullptr) {
-        freeReplyObject(reply_);
-    }
+    clean_reply();
   }
 
   void redis_set(const std::string& key, const std::vector<float>& values) const;
 
-  // compiler should return rvalue without coping
+  // compiler should return rvalue without coping, see
   // https://stackoverflow.com/questions/44065808/returning-stdvector-with-stdmove
   std::vector<float> redis_get(const std::string& key, int values_size) const;
 
+  // this operation is atomic, see https://redis.io/topics/transactions
+  bool redis_increase(const std::string& key, const std::vector<float>& increments) const;
+
  private:
-  int maxRetries_;
-  int numConnections_;
+  void clean_reply() const {
+    if (reply_ != nullptr) {
+      freeReplyObject(reply_);
+      reply_ = nullptr;
+    }
+  }
+
+  int max_retries_;
+  int num_connections_;
   int timeout_;
 
   mutable redisReply* reply_;
