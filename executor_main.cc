@@ -1,4 +1,5 @@
 #include <ctime>
+#include <unistd.h>
 
 #include <algorithm>
 #include <iostream>
@@ -160,6 +161,33 @@ void ProcessEStep(const artm::Batch& batch,
 }
 */
 
+bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
+  auto reply = redis_client.get_value(key);
+  if (reply == START_TERMINATION) {
+    return false;
+  }
+
+  redis_client.set_value(key, flag);
+  return true;
+}
+
+bool WaitForFlag(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
+  while (true) {
+    auto reply = redis_client.get_value(key);
+    if (reply == START_TERMINATION) {
+      break;
+    }
+
+    if (reply == flag) {
+      return true;
+    }
+
+    usleep(2000);
+  }
+  return false;
+}
+
+
 int main(int argc, char* argv[]) {
   const clock_t begin_time = clock();
 
@@ -168,14 +196,13 @@ int main(int argc, char* argv[]) {
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
   try {
+    if (!CheckNonTerminatedAndUpdate(redis_client, params.command_key, FINISH_GLOBAL_START)) {
+      throw std::runtime_error("Step 0, got termination command");
+    };
 
-
-    // ВЫСТАВИТЬ ЗДЕСЬ КОНЕЦ СТАРТА И ЖДАТЬ НАЧАЛА ИНИЦИАЛИЗАЦИИ
-
-
-
-
-
+    if (!WaitForFlag(redis_client, params.command_key, START_INITIALIZATION)) {
+      throw std::runtime_error("Step 1 start, got termination command");
+    };
 
     bool debug_print = (params.debug_print == 1);
 
@@ -227,10 +254,16 @@ int main(int argc, char* argv[]) {
     }
 
     redis_client.set_value(params.data_key, std::to_string(n));
-    
-// ЗДЕСЬ И ВЕЗДЕ НАДО ПРОВЕРЯТЬ СОДЕРЖИМОЕ, ПРЕЖДЕ ЧЕМ ПИСАТЬ
-    //redis_client.set_value(params.command_key, FINISH_INITIALIZATION);
 
+    if (!CheckNonTerminatedAndUpdate(redis_client, params.command_key, FINISH_INITIALIZATION)) {
+      throw std::runtime_error("Step 1 finish, got termination command");
+    }
+
+    
+
+// УСЛОВИЕ НА ТО, ЧЕГО ЖДЁМ
+    //if (!continue_fitting) {
+   // if (!WaitForFlag(redis_client, params.command_key, START_INITIALIZATION)) { return -2; };
 
 
 /*
@@ -253,13 +286,19 @@ int main(int argc, char* argv[]) {
     Normalize(p_wt, *n_wt);
   }
   */
-
-    std::cout << "Executor with cmd key '" << params.command_key
-              << "' has finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC
-              << " sec." << std::endl;
+  } catch (const std::exception& error) {
     redis_client.set_value(params.command_key, FINISH_TERMINATION);
+    throw std::runtime_error(params.data_key + " " + error.what());
   } catch (...) {
     redis_client.set_value(params.command_key, FINISH_TERMINATION);
+    throw;
   }
+  
+  // normal termination
+  redis_client.set_value(params.command_key, FINISH_TERMINATION);
+
+  std::cout << "Executor with cmd key '" << params.command_key
+            << "' has finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC
+            << " sec." << std::endl;
   return 0;
 }

@@ -69,13 +69,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   std::cout << "debug-print:      " << p->debug_print << std::endl;
 }
 
-
-
-
-
-// ЗАМЕНИТЬ НА std::system, убрать <array>
-
-
 std::string exec(const char* cmd) {
   std::array<char, 128> buffer;
   std::string result;
@@ -121,26 +114,63 @@ void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
 }
 */
 
-bool CheckFinishedOrTerminated(const std::string& old_flag, const std::string& new_flag) {
+bool CheckFinishedOrTerminated(const RedisClient& redis_client,
+                               const std::vector<std::string>& command_keys,
+                               const std::string& old_flag,
+                               const std::string& new_flag,
+                               int timeout = -1) {
+  int time_passed = 0;
+  bool terminated = false;
   while (true) {
-    /*
-    bool executors_finished = true;
-    bool terminated = false;
-    for (const auto& key : exucutor_command_keys) {
+    if ((timeout > 0 && time_passed > timeout) || terminated) {
+      break;
+    }
+
+    int executors_finished = 0;
+    for (const auto& key : command_keys) {
       auto reply = redis_client.get_value(key);
       if (reply == FINISH_TERMINATION) {
         terminated = true;
         break;
       }
-    }*/
+
+      if (reply == old_flag) {
+        break;
+      }
+
+      if (reply == new_flag) {
+        ++executors_finished;
+      }
+    }
+
+    if (executors_finished == command_keys.size()) {
+      return true;
+    }
 
     usleep(2000);
+    time_passed += 2000;
   }
   return false;
 }
 
-bool CheckTerminatedAndUpdate(const std::string& flag) {
-return false;
+// this function firstly check the availability of executer and then send him new command,
+// it's not fully safe, as if the execiter fails in between get and set, it will cause
+// endless loop during the next syncronozation
+bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
+                                 const std::vector<std::string>& command_keys,
+                                 const std::string& flag) {
+  for (const auto& key : command_keys) {
+    auto reply = redis_client.get_value(key);
+    if (reply == FINISH_TERMINATION) {
+      return false;
+    }
+  }
+
+  for (const auto& key : command_keys) {
+    redis_client.set_value(key, flag);
+  }
+
+  return true;
 }
 
 
@@ -152,7 +182,7 @@ int main(int argc, char* argv[]) {
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
 
-  // step 0: prepare parameters
+  // step 0: prepare parameters and keys
   std::string res = exec((std::string("wc -l ") + params.vocab_path).c_str());
   const int vocab_size = std::stoi(res.substr(0, res.find(" ", 5)));
   std::cout << "Total vocabulary size: " << vocab_size << std::endl;
@@ -165,8 +195,8 @@ int main(int argc, char* argv[]) {
 
   auto batch_begin_end_indices = GetIndices(params.num_executors, num_batches);
 
-  std::vector<std::string> exucutor_command_keys;
-  std::vector<std::string> exucutor_data_keys;
+  std::vector<std::string> executor_command_keys;
+  std::vector<std::string> executor_data_keys;
 
   std::cout << std::endl << "Executors start indices: " << std::endl;
   for (int i = 0; i < params.num_executors; ++i) {
@@ -177,46 +207,84 @@ int main(int argc, char* argv[]) {
               << ", " << batch_begin_end_indices[i].second << ")"
               << std::endl;
 
-    exucutor_command_keys.push_back(kEscChar + std::string("exec-cmd-") + std::to_string(i));
-    exucutor_data_keys.push_back(kEscChar + std::string("exec-data-") + std::to_string(i));
+    executor_command_keys.push_back(kEscChar + std::string("exec-cmd-") + std::to_string(i));
+    executor_data_keys.push_back(kEscChar + std::string("exec-data-") + std::to_string(i));
   }
   std::cout << std::endl << std::endl;
 
-  // step 1: create communication slots, set initialization command and start executors
-  for (int i = 0; i < params.num_executors; ++i) {
-    redis_client.set_value(exucutor_command_keys[i], START_GLOBAL_START);
-    redis_client.set_value(exucutor_data_keys[i], "");
+  try {
+    // step 1: create communication slots, set and check start cmd flag, start executors and proceed init
+    for (int i = 0; i < params.num_executors; ++i) {
+      redis_client.set_value(executor_command_keys[i], START_GLOBAL_START);
+      redis_client.set_value(executor_data_keys[i], "");
 
-    std::stringstream start_executor_cmd;
-    start_executor_cmd << "./executor_main"
-                       << " --batches-dir-path '" << params.batches_dir_path << "'"
-                       << " --vocab-path '" << params.vocab_path << "'"
-                       << " --num-topics " << params.num_topics
-                       << " --num-inner-iter " << params.num_inner_iters
-                       << " --redis-ip " << params.redis_ip
-                       << " --redis-port " << params.redis_port
-                       << " --continue-fitting " << params.continue_fitting
-                       << " --debug-print " << params.debug_print
-                       << " --token-begin-index " << token_begin_end_indices[i].first
-                       << " --token-end-index " << token_begin_end_indices[i].second
-                       << " --batch-begin-index " << batch_begin_end_indices[i].first
-                       << " --batch-end-index " << batch_begin_end_indices[i].second
-                       << " --command-key '" << exucutor_command_keys[i] << "'"
-                       << " --data-key '" << exucutor_data_keys[i] << "'";
+      std::stringstream start_executor_cmd;
+      start_executor_cmd << "./executor_main"
+                         << " --batches-dir-path '" << params.batches_dir_path << "'"
+                         << " --vocab-path '" << params.vocab_path << "'"
+                         << " --num-topics " << params.num_topics
+                         << " --num-inner-iter " << params.num_inner_iters
+                         << " --redis-ip " << params.redis_ip
+                         << " --redis-port " << params.redis_port
+                         << " --continue-fitting " << params.continue_fitting
+                         << " --debug-print " << params.debug_print
+                         << " --token-begin-index " << token_begin_end_indices[i].first
+                         << " --token-end-index " << token_begin_end_indices[i].second
+                         << " --batch-begin-index " << batch_begin_end_indices[i].first
+                         << " --batch-end-index " << batch_begin_end_indices[i].second
+                         << " --command-key '" << executor_command_keys[i] << "'"
+                         << " --data-key '" << executor_data_keys[i] << "'"
+                         << " &";
 
-    std::system(start_executor_cmd.str().c_str());
+      std::system(start_executor_cmd.str().c_str());
+    }
+
+    // we give 1.0 sec to all executers to start, if even one of them
+    // didn't response, it means, that it had failed to start
+    
+    bool ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
+                                        START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
+    if (!ok) { throw std::runtime_error("Step 0, got termination status"); }
+
+    ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_INITIALIZATION);
+    if (!ok) { throw std::runtime_error("Step 1 start, got termination status"); }
+
+    ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
+                                   START_INITIALIZATION, FINISH_INITIALIZATION);
+    
+
+
+
+
+    // UNCOMMENT IN FUTURE, DON'T FORGET TO HANDLE FINAL FINISH STATUS AS SUCCESS
+    //if (!ok) { throw std::runtime_error("Step 1 finish, got termination status"); }
+
+    double n = 0.0;
+    for (const auto& key : executor_data_keys) {
+      n += std::stod(redis_client.get_value(key));
+    }
+    std::cout << std::endl
+              << "All executors have started! Total number of token slots in collection: "
+              << n << std::endl;
+
+
+
+  // step 3: EM-iterations
+
+
+  // step 4: finalization
+
+  } catch (...) {
+    for (const auto& key : executor_command_keys) {
+      redis_client.set_value(key, START_TERMINATION);
+    }
+    throw;
   }
 
- // проверить, что глобально все стартанули и ждут начала (чек с таймаутом - 1-2 сек)
-
-  if (!CheckFinishedOrTerminated(START_INITIALIZATION, FINISH_INITIALIZATION)) { return -1; }
-
-  if (!CheckTerminatedAndUpdate(START_NORMALIZATION)) { return -2; }
-
-  // ещё каждый должен посчитать размер своей части и вернуть
-
-
-
+  // normal termination
+  for (const auto& key : executor_command_keys) {
+    redis_client.set_value(key, START_TERMINATION);
+  }
 
   std::cout << "Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl;
   return 0;
