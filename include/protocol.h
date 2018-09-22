@@ -1,0 +1,10 @@
+#pragma once
+
+const int START_INITIALIZATION = 0;
+const int FINISH_INITIALIZATION = 1;
+const int START_ITERATION = 2;
+const int FINISH_ITERATION = 3;
+const int START_NORMALIZATION = 4;
+const int FINISH_NORMALIZATION = 5;
+const int START_TERMINATION = 6;
+const int FINISH_TERMINATION = 7;

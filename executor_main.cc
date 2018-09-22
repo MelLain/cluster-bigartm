@@ -21,6 +21,7 @@
 #include "helpers.h"
 #include "processor_helpers.h"
 #include "redis_client.h"
+#include "protocol.h"
 
 namespace po = boost::program_options;
 
@@ -40,37 +41,37 @@ struct Parameters {
     std::string redis_port;
     std::string show_top_tokens;
     std::string continue_fitting;
-  };
+};
 
-  void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
-    po::options_description all_options("Options");
-    all_options.add_options()
-      ("help,H", "Show help")
-      ("num-topics,T", po::value(&p->num_topics)->default_value(1), "Input number of topics")
-      ("num-outer-iter,O", po::value(&p->num_outer_iters)->default_value(1), "Input number of collection passes")
-      ("num-inner-iter,I", po::value(&p->num_inner_iters)->default_value(1), "Input number of document passes")
-      ("batches-dir-path,B", po::value(&p->batches_dir_path)->default_value("."), "Input path to files with documents")
-      ("vocab-path,V", po::value(&p->vocab_path)->default_value("."), "Input path to files with documents")
-      ("redis-ip,A", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
-      ("redis-port,P", po::value(&p->redis_port)->default_value(""), "port of redis instance")
-      ("show-top-tokens,S", po::value(&p->show_top_tokens)->default_value("0"), "1 - print top tokens, 0 - not")
-      ("continue-fitting,F", po::value(&p->continue_fitting)->default_value("0"), "1 - continue fitting redis model, 0 - restart")
-      ;
+void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
+  po::options_description all_options("Options");
+  all_options.add_options()
+    ("help,H", "Show help")
+    ("num-topics,T", po::value(&p->num_topics)->default_value(1), "Input number of topics")
+    ("num-outer-iter,O", po::value(&p->num_outer_iters)->default_value(1), "Input number of collection passes")
+    ("num-inner-iter,I", po::value(&p->num_inner_iters)->default_value(1), "Input number of document passes")
+    ("batches-dir-path,B", po::value(&p->batches_dir_path)->default_value("."), "Input path to files with documents")
+    ("vocab-path,V", po::value(&p->vocab_path)->default_value("."), "Input path to files with documents")
+    ("redis-ip,A", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
+    ("redis-port,P", po::value(&p->redis_port)->default_value(""), "port of redis instance")
+    ("show-top-tokens,S", po::value(&p->show_top_tokens)->default_value("0"), "1 - print top tokens, 0 - not")
+    ("continue-fitting,F", po::value(&p->continue_fitting)->default_value("0"), "1 - continue fitting redis model, 0 - restart")
+    ;
 
-    po::variables_map vm;
-    store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
-    notify(vm);
+  po::variables_map vm;
+  store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
+  notify(vm);
 
-    std::cout << "num-topics:       " << p->num_topics << std::endl;
-    std::cout << "num-outer-iter:   " << p->num_outer_iters << std::endl;
-    std::cout << "num-inner-iter:   " << p->num_inner_iters << std::endl;
-    std::cout << "batches-dir-path: " << p->batches_dir_path << std::endl;
-    std::cout << "vocab-path:       " << p->vocab_path << std::endl;
-    std::cout << "redis-ip:       " << p->redis_ip << std::endl;
-    std::cout << "redis-port:       " << p->redis_port << std::endl;
-    std::cout << "show-top-tokens:       " << p->show_top_tokens << std::endl;
-    std::cout << "continue-fitting:       " << p->continue_fitting << std::endl;
-  }
+  std::cout << "num-topics:       " << p->num_topics << std::endl;
+  std::cout << "num-outer-iter:   " << p->num_outer_iters << std::endl;
+  std::cout << "num-inner-iter:   " << p->num_inner_iters << std::endl;
+  std::cout << "batches-dir-path: " << p->batches_dir_path << std::endl;
+  std::cout << "vocab-path:       " << p->vocab_path << std::endl;
+  std::cout << "redis-ip:       " << p->redis_ip << std::endl;
+  std::cout << "redis-port:       " << p->redis_port << std::endl;
+  std::cout << "show-top-tokens:       " << p->show_top_tokens << std::endl;
+  std::cout << "continue-fitting:       " << p->continue_fitting << std::endl;
+}
 
 
 Normalizers FindNt(const PhiMatrix& n_wt) {
