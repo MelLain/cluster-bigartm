@@ -1,6 +1,6 @@
 #include "redis_client.h"
 
-void RedisClient::redis_set(const std::string& key, const std::vector<float>& values) const {
+void RedisClient::set_values(const std::string& key, const std::vector<float>& values) const {
   auto val_ptr = reinterpret_cast<const char*>(&(values[0]));
   auto val_size = (size_t) (values.size() * sizeof(float));
 
@@ -8,7 +8,7 @@ void RedisClient::redis_set(const std::string& key, const std::vector<float>& va
   clean_reply();
 }
 
-std::vector<float> RedisClient::redis_get(const std::string& key, int values_size) const {
+std::vector<float> RedisClient::get_values(const std::string& key, int values_size) const {
   reply_ = (redisReply*) redisCommand(context_, "GET %s", key.c_str());
 
   auto values = reinterpret_cast<const float*>(reply_->str);
@@ -18,21 +18,21 @@ std::vector<float> RedisClient::redis_get(const std::string& key, int values_siz
   return retval;
 }
 
-void RedisClient::redis_set_value(const std::string& key, const std::string& value) const {
+void RedisClient::set_value(const std::string& key, const std::string& value) const {
   reply_ = (redisReply*) redisCommand(context_, "SET %s %s", key.c_str(), value.c_str(), value.size());
   clean_reply();
 }
 
-std::string RedisClient::redis_get_value(const std::string& key, int value_size) const {
+std::string RedisClient::get_value(const std::string& key) const {
   reply_ = (redisReply*) redisCommand(context_, "GET %s", key.c_str());
 
-  std::string retval = std::string(reply_->str, value_size);
+  std::string retval = std::string(reply_->str);
   clean_reply();
 
   return retval;
 }
 
-bool RedisClient::redis_increase(const std::string& key, const std::vector<float>& increments) const {
+bool RedisClient::increase_values(const std::string& key, const std::vector<float>& increments) const {
   reply_ = (redisReply*) redisCommand(context_, "WATCH %s", key.c_str());
   clean_reply();
 

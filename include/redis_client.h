@@ -33,17 +33,17 @@ class RedisClient {
   }
 
   // both set and get operations are atomic by default
-  void redis_set(const std::string& key, const std::vector<float>& values) const;
+  void set_values(const std::string& key, const std::vector<float>& values) const;
 
   // compiler should return rvalue without coping, see
   // https://stackoverflow.com/questions/44065808/returning-stdvector-with-stdmove
-  std::vector<float> redis_get(const std::string& key, int values_size) const;
+  std::vector<float> get_values(const std::string& key, int values_size) const;
 
-  void redis_set_value(const std::string& key, const std::string& value) const;
-  std::string redis_get_value(const std::string& key, int value_size) const;
+  void set_value(const std::string& key, const std::string& value) const;
+  std::string get_value(const std::string& key) const;
 
   // this operation is atomic, see https://redis.io/topics/transactions
-  bool redis_increase(const std::string& key, const std::vector<float>& increments) const;
+  bool increase_values(const std::string& key, const std::vector<float>& increments) const;
 
  private:
   void clean_reply() const {

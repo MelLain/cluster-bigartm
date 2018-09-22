@@ -18,12 +18,12 @@ int RedisPhiMatrix::token_index(const Token& token) const {
 
 // ATTN: this method should be used only for debugging, it's too slow for learning process!
 float RedisPhiMatrix::get(int token_id, int topic_id) const {
-  std::vector<float> buffer = redis_client_.redis_get(to_key(token_id), topic_size());
+  std::vector<float> buffer = redis_client_.get_values(to_key(token_id), topic_size());
   return buffer[topic_id];
 }
 
 void RedisPhiMatrix::get(int token_id, std::vector<float>* buffer) const {
-  std::vector<float> temp = redis_client_.redis_get(to_key(token_id), topic_size());
+  std::vector<float> temp = redis_client_.get_values(to_key(token_id), topic_size());
   for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
     (*buffer)[topic_id] = temp[topic_id];
   }
@@ -34,7 +34,7 @@ void RedisPhiMatrix::set(int token_id, int topic_id, float value) {
 }
 
 void RedisPhiMatrix::set(int token_id, const std::vector<float>& buffer) {
-  redis_client_.redis_set(to_key(token_id), buffer);
+  redis_client_.set_values(to_key(token_id), buffer);
 }
 
 void RedisPhiMatrix::increase(int token_id, int topic_id, float increment) {
@@ -43,7 +43,7 @@ void RedisPhiMatrix::increase(int token_id, int topic_id, float increment) {
 
 void RedisPhiMatrix::increase(int token_id, const std::vector<float>& increment) {
   auto key = to_key(token_id);
-  if (!redis_client_.redis_increase(key, increment)) {
+  if (!redis_client_.increase_values(key, increment)) {
     std::cout << "WARN: Update of token data " << key << " has failed" << std::endl;
   }
 }
@@ -57,7 +57,7 @@ int RedisPhiMatrix::AddToken(const Token& token, bool flag) {
   int index = token_collection_.AddToken(token);
   auto temp = std::vector<float>(topic_size(), 0.0f);
   if (flag) {
-    redis_client_.redis_set(to_key(index), temp);
+    redis_client_.set_values(to_key(index), temp);
   }
   return index;
 }

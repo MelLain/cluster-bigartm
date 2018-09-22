@@ -31,47 +31,57 @@ static const int kNumRetries = 10;
 
 struct Parameters {
     int num_topics;
-    int num_outer_iters;
     int num_inner_iters;
     std::string batches_dir_path;
     std::string vocab_path;
     std::string redis_ip;
     std::string redis_port;
-    std::string show_top_tokens;
-    std::string continue_fitting;
+    int continue_fitting;
+    int token_start_index;
+    int batch_start_index;
+    std::string command_key;
+    std::string data_key;
+    int debug_print;
 };
 
 void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   po::options_description all_options("Options");
   all_options.add_options()
-    ("help,H", "Show help")
-    ("num-topics,T", po::value(&p->num_topics)->default_value(1), "Input number of topics")
-    ("num-outer-iter,O", po::value(&p->num_outer_iters)->default_value(1), "Input number of collection passes")
-    ("num-inner-iter,I", po::value(&p->num_inner_iters)->default_value(1), "Input number of document passes")
-    ("batches-dir-path,B", po::value(&p->batches_dir_path)->default_value("."), "Input path to files with documents")
-    ("vocab-path,V", po::value(&p->vocab_path)->default_value("."), "Input path to files with documents")
-    ("redis-ip,A", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
-    ("redis-port,P", po::value(&p->redis_port)->default_value(""), "port of redis instance")
-    ("show-top-tokens,S", po::value(&p->show_top_tokens)->default_value("0"), "1 - print top tokens, 0 - not")
-    ("continue-fitting,F", po::value(&p->continue_fitting)->default_value("0"), "1 - continue fitting redis model, 0 - restart")
+    ("help", "Show help")
+    ("num-topics", po::value(&p->num_topics)->default_value(1), "Input number of topics")
+    ("num-inner-iter", po::value(&p->num_inner_iters)->default_value(1), "Input number of document passes")
+    ("batches-dir-path", po::value(&p->batches_dir_path)->default_value("."), "Input path to files with documents")
+    ("vocab-path", po::value(&p->vocab_path)->default_value("."), "Input path to files with documents")
+    ("redis-ip", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
+    ("redis-port", po::value(&p->redis_port)->default_value(""), "port of redis instance")
+    ("continue-fitting", po::value(&p->continue_fitting)->default_value(0), "1 - continue fitting redis model, 0 - restart")
+    ("token-start-index", po::value(&p->token_start_index)->default_value(0), "index of token to init/norm from")
+    ("batch-start-index", po::value(&p->batch_start_index)->default_value(0), "index of batch to process from")
+    ("command-key", po::value(&p->command_key)->default_value(""), "redis key to communicate with master")
+    ("data-key", po::value(&p->data_key)->default_value(""), "redis key to exchange data with master")
+    ("debug-print", po::value(&p->debug_print)->default_value(0), "1 - print debug info, 0 - not")
     ;
 
   po::variables_map vm;
   store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
   notify(vm);
 
-  std::cout << "num-topics:       " << p->num_topics << std::endl;
-  std::cout << "num-outer-iter:   " << p->num_outer_iters << std::endl;
-  std::cout << "num-inner-iter:   " << p->num_inner_iters << std::endl;
-  std::cout << "batches-dir-path: " << p->batches_dir_path << std::endl;
-  std::cout << "vocab-path:       " << p->vocab_path << std::endl;
-  std::cout << "redis-ip:       " << p->redis_ip << std::endl;
-  std::cout << "redis-port:       " << p->redis_port << std::endl;
-  std::cout << "show-top-tokens:       " << p->show_top_tokens << std::endl;
-  std::cout << "continue-fitting:       " << p->continue_fitting << std::endl;
+  if (p->debug_print == 1) {
+    std::cout << std::endl << "======= Executor info, cmd key '" << p->command_key << "' =======" << std::endl;
+    std::cout << "num-topics:        " << p->num_topics << std::endl;
+    std::cout << "num-inner-iter:    " << p->num_inner_iters << std::endl;
+    std::cout << "batches-dir-path:  " << p->batches_dir_path << std::endl;
+    std::cout << "vocab-path:        " << p->vocab_path << std::endl;
+    std::cout << "redis-ip:          " << p->redis_ip << std::endl;
+    std::cout << "redis-port:        " << p->redis_port << std::endl;
+    std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
+    std::cout << "token-start-index: " << p->token_start_index << std::endl;
+    std::cout << "batch-start-index: " << p->batch_start_index << std::endl;
+    std::cout << "data-key:          " << p->data_key << std::endl << std::endl;
+  }
 }
 
-
+/*
 Normalizers FindNt(const PhiMatrix& n_wt) {
   Normalizers retval;
   std::vector<float> helper = std::vector<float>(n_wt.topic_size(), 0.0f);
@@ -141,13 +151,22 @@ void ProcessEStep(const artm::Batch& batch,
   ProcessorHelpers::InferThetaAndUpdateNwtSparse(batch, *sparse_ndw, p_wt, theta_matrix.get(),
                                                  nwt_writer.get(), blas, num_inner_iters, perplexity_value);
 }
+*/
 
 int main(int argc, char* argv[]) {
   const clock_t begin_time = clock();
 
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
+  bool debug_print = (params.debug_print == 1);
 
+  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
+  std::string current_cmd = redis_client.get_value(params.command_key);
+  if (debug_print) {
+    std::cout << "Read from key: " << params.command_key << ", value: " << current_cmd << std::endl;
+  }
+
+  /*
   std::vector<std::string> topics;
   for (int i = 0; i < params.num_topics; ++i) {
     topics.push_back("topic_" + std::to_string(i));
@@ -178,11 +197,10 @@ int main(int argc, char* argv[]) {
   }
   std::cout << "Total number of token slots is: " << n << std::endl;
 
-  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
   auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
   auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
 
-  bool continue_fitting = (params.continue_fitting == "1");
+  bool continue_fitting = (params.continue_fitting == 1);
   for (const auto& token : tokens) {
     p_wt->AddToken(token, !continue_fitting);
     n_wt->AddToken(token, !continue_fitting);
@@ -207,7 +225,10 @@ int main(int argc, char* argv[]) {
     std::cout << "Perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
     Normalize(p_wt, *n_wt);
   }
+  */
 
-  std::cout << "Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl;
+  std::cout << "Executor with cmd key '" << params.command_key
+            << "' has finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC
+            << " sec." << std::endl;
   return 0;
 }
