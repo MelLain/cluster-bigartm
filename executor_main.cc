@@ -16,7 +16,6 @@
 
 #include "blas.h"
 #include "token.h"
-#include "dense_phi_matrix.h"
 #include "redis_phi_matrix.h"
 #include "helpers.h"
 #include "processor_helpers.h"
@@ -27,8 +26,7 @@ namespace po = boost::program_options;
 
 typedef std::unordered_map<ClassId, std::vector<double>> Normalizers;
 
-static const int kConnectionTimeout = 100;
-static const int kNumConnections = 1;
+static const int kConnTimeout = 100;
 static const int kNumRetries = 10;
 
 struct Parameters {
@@ -144,33 +142,11 @@ void ProcessEStep(const artm::Batch& batch,
                                                  nwt_writer.get(), blas, num_inner_iters, perplexity_value);
 }
 
-void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
-  for (int i = 0; i < p_wt.topic_size(); ++i) {
-    std::vector<std::pair<Token, float>> pairs;
-    for (int j = 0; j < p_wt.token_size(); ++j) {
-      pairs.push_back(std::make_pair(p_wt.token(j), p_wt.get(j, i)));
-    }
-    std::sort(pairs.begin(), pairs.end(),
-              [](const std::pair<Token, float>& p1, const std::pair<Token, float>& p2) {
-                return p1.second > p2.second;
-              });
-    std::cout << "\nTopic: " << p_wt.topic_name(i) << std::endl;
-    for (int j = 0; j < num_tokens; ++j) {
-      std::cout << pairs[j].first.keyword << " (" << pairs[j].second << ")\n";
-    }
-  }
-}
-
 int main(int argc, char* argv[]) {
   const clock_t begin_time = clock();
 
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
-
-  bool use_redis = true;
-  if (params.redis_ip.empty() or params.redis_port.empty()) {
-    use_redis = false;
-  }
 
   std::vector<std::string> topics;
   for (int i = 0; i < params.num_topics; ++i) {
@@ -202,28 +178,11 @@ int main(int argc, char* argv[]) {
   }
   std::cout << "Total number of token slots is: " << n << std::endl;
 
-  std::shared_ptr<PhiMatrix> p_wt;
-  std::shared_ptr<PhiMatrix> n_wt;
-
-  std::shared_ptr<RedisClient> redis_client;
-  if (use_redis) {
-    redis_client = std::shared_ptr<RedisClient>(
-      new RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnectionTimeout));
-  }
+  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
+  auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
+  auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
 
   bool continue_fitting = (params.continue_fitting == "1");
-  if (!use_redis && continue_fitting) {
-    throw std::runtime_error("Unable to continue fitting of non-redis model!");
-  }
-
-  if (use_redis) {
-    p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
-    n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
-  } else {
-    p_wt = std::shared_ptr<DensePhiMatrix>(new DensePhiMatrix(ModelName("pwt"), topics));
-    n_wt = std::shared_ptr<DensePhiMatrix>(new DensePhiMatrix(ModelName("nwt"), topics));
-  }
-
   for (const auto& token : tokens) {
     p_wt->AddToken(token, !continue_fitting);
     n_wt->AddToken(token, !continue_fitting);
@@ -247,10 +206,6 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
     Normalize(p_wt, *n_wt);
-  }
-
-  if (params.show_top_tokens == "1") {
-    PrintTopTokens(*p_wt);
   }
 
   std::cout << "Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl;

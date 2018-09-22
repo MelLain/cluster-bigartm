@@ -16,7 +16,7 @@ class RedisPhiMatrix : public PhiMatrix{
  public:
   RedisPhiMatrix(const ModelName& model_name,
   	             const std::vector<std::string>& topic_name,
-  	             std::shared_ptr<RedisClient> redis_client)
+  	             RedisClient& redis_client)
       : model_name_(model_name)
       , topic_name_(topic_name)
       , token_collection_()
@@ -64,5 +64,5 @@ class RedisPhiMatrix : public PhiMatrix{
   ModelName model_name_;
   std::vector<std::string> topic_name_;
   TokenCollection token_collection_;
-  std::shared_ptr<RedisClient> redis_client_;
+  RedisClient& redis_client_;
 };

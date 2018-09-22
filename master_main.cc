@@ -12,8 +12,10 @@
 #include <boost/program_options.hpp>
 
 #include "common.h"
+#include "phi_matrix.h"
 #include "protocol.h"
 #include "redis_client.h"
+#include "token.h"
 
 namespace po = boost::program_options;
 
@@ -78,13 +80,31 @@ std::string exec(const char* cmd) {
   return result;
 }
 
-std::vector<int> GetStartIndices(int num_executors, int vocab_size) {
+std::vector<int> GetStartIndices(int num_executors, int size) {
   std::vector<int> retval;
-  const int step = vocab_size / num_executors;
+  const int step = size / num_executors;
   for (int i = 0; i < num_executors; ++i) {
     retval.push_back(i * step);
   }
   return retval;
+}
+
+
+void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
+  for (int i = 0; i < p_wt.topic_size(); ++i) {
+    std::vector<std::pair<Token, float>> pairs;
+    for (int j = 0; j < p_wt.token_size(); ++j) {
+      pairs.push_back(std::make_pair(p_wt.token(j), p_wt.get(j, i)));
+    }
+    std::sort(pairs.begin(), pairs.end(),
+              [](const std::pair<Token, float>& p1, const std::pair<Token, float>& p2) {
+                return p1.second > p2.second;
+              });
+    std::cout << "\nTopic: " << p_wt.topic_name(i) << std::endl;
+    for (int j = 0; j < num_tokens; ++j) {
+      std::cout << pairs[j].first.keyword << " (" << pairs[j].second << ")\n";
+    }
+  }
 }
 
 
@@ -102,21 +122,38 @@ int main(int argc, char* argv[]) {
   const int vocab_size = std::stoi(res.substr(0, res.find(" ", 5)));
   std::cout << "Total vocabulary size: " << vocab_size << std::endl;
 
-  std::vector<int> start_indices = GetStartIndices(params.num_executors, vocab_size);
-  std::vector<std::string> exucutor_keys;
+  std::vector<int> token_start_indices = GetStartIndices(params.num_executors, vocab_size);
+
+  res = exec((std::string("ls -lt ") + params.batches_dir_path + std::string(" | wc -l")).c_str());
+  const int num_batches = std::stoi(res.substr(res.rfind(" "), res.size())) - 1;
+  std::cout << "Total number of batches: " << num_batches << std::endl;
+
+  std::vector<int> batch_start_indices = GetStartIndices(params.num_executors, num_batches);
+
+  std::vector<std::string> exucutor_command_keys;
+  std::vector<std::string> exucutor_data_keys;
+
   std::cout << "Executors start indices: " << std::endl;
   for (int i = 0; i < params.num_executors; ++i) {
-    std::cout << start_indices[i] << std::endl;
-    exucutor_keys.push_back(kEscChar + std::string("exec-") + std::to_string(i));
+    std::cout << "Executor " << i
+              << ", token start index: " << token_start_indices[i]
+              << ", batch start index: " << batch_start_indices[i]
+              << std::endl;
+
+    exucutor_command_keys.push_back(kEscChar + std::string("exec-cmd-") + std::to_string(i));
+    exucutor_data_keys.push_back(kEscChar + std::string("exec-data-") + std::to_string(i));
   }
 
   // step 1: create communication slots, set initialization command and start executors
   std::stringstream ss;
 
   for (int i = 0; i < params.num_executors; ++i) {
-    redis_client->redis_set_value(exucutor_keys[i], START_INITIALIZATION);
+    //redis_client->redis_set_value(exucutor_command_keys[i], START_INITIALIZATION);
     //std::system();
   }
+
+  // КОМУ КАКУЮ ПАЧКУ БАТЧЕЙ ОБРАБАТЫВАТЬ!!! (взять размер директории и поделить)
+  // ещё каждый должен посчитать размер своей части и вернуть
 
 
 

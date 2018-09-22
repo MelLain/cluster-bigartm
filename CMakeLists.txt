@@ -20,7 +20,6 @@ include_directories(./3rdparty)
 
 set(SOURCE_LIB
   src/blas.cc
-  src/dense_phi_matrix.cc
   src/helpers.cc
   src/messages.pb.cc
   src/processor_helpers.cc
