@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
   std::shared_ptr<RedisClient> redis_client;
   if (use_redis) {
     redis_client = std::shared_ptr<RedisClient>(
-      new RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kNumConnections, kConnectionTimeout));
+      new RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnectionTimeout));
   }
 
   bool continue_fitting = (params.continue_fitting == "1");

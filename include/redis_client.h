@@ -10,9 +10,8 @@
 
 class RedisClient {
  public:
-  RedisClient(const std::string& ip, int port, int max_retries, int num_connections, int timeout)
+  RedisClient(const std::string& ip, int port, int max_retries, int timeout)
       : max_retries_(max_retries)
-      , num_connections_(num_connections)
       , timeout_(timeout)
       , reply_(nullptr)
   {
@@ -40,6 +39,9 @@ class RedisClient {
   // https://stackoverflow.com/questions/44065808/returning-stdvector-with-stdmove
   std::vector<float> redis_get(const std::string& key, int values_size) const;
 
+  void redis_set_value(const std::string& key, const std::string& value) const;
+  std::string redis_get_value(const std::string& key, int value_size) const;
+
   // this operation is atomic, see https://redis.io/topics/transactions
   bool redis_increase(const std::string& key, const std::vector<float>& increments) const;
 
@@ -52,7 +54,6 @@ class RedisClient {
   }
 
   int max_retries_;
-  int num_connections_;
   int timeout_;
 
   mutable redisReply* reply_;

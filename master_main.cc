@@ -1,16 +1,19 @@
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 
+#include <array>
 #include <iostream>
 #include <memory>
-#include <stdexcept>
 #include <string>
-#include <array>
+#include <sstream>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include "common.h"
 #include "protocol.h"
+#include "redis_client.h"
 
 namespace po = boost::program_options;
 
@@ -91,26 +94,29 @@ int main(int argc, char* argv[]) {
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
-  bool use_redis = true;
-  if (params.redis_ip.empty() or params.redis_port.empty()) {
-    use_redis = false;
-  }
+  std::shared_ptr<RedisClient> redis_client = std::shared_ptr<RedisClient>(
+    new RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100));
 
-  bool continue_fitting = (params.continue_fitting == "1");
-  if (!use_redis && continue_fitting) {
-    throw std::runtime_error("Unable to continue fitting of non-redis model!");
-  }
-
+  // step 0: prepare parameters
   std::string res = exec((std::string("wc -l ") + params.vocab_path).c_str());
   const int vocab_size = std::stoi(res.substr(0, res.find(" ", 5)));
   std::cout << "Total vocabulary size: " << vocab_size << std::endl;
 
   std::vector<int> start_indices = GetStartIndices(params.num_executors, vocab_size);
+  std::vector<std::string> exucutor_keys;
   std::cout << "Executors start indices: " << std::endl;
-  for (const int i : start_indices) {
-    std::cout << i << std::endl;
+  for (int i = 0; i < params.num_executors; ++i) {
+    std::cout << start_indices[i] << std::endl;
+    exucutor_keys.push_back(kEscChar + std::string("exec-") + std::to_string(i));
   }
 
+  // step 1: create communication slots, set initialization command and start executors
+  std::stringstream ss;
+
+  for (int i = 0; i < params.num_executors; ++i) {
+    redis_client->redis_set_value(exucutor_keys[i], START_INITIALIZATION);
+    //std::system();
+  }
 
 
 

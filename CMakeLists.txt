@@ -52,6 +52,7 @@ target_link_libraries(
 
 target_link_libraries(
   master_main
+  cluster_bigartm_lib
   ${Boost_LIBRARIES}
   -lhiredis
 )

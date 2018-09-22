@@ -18,6 +18,20 @@ std::vector<float> RedisClient::redis_get(const std::string& key, int values_siz
   return retval;
 }
 
+void RedisClient::redis_set_value(const std::string& key, const std::string& value) const {
+  reply_ = (redisReply*) redisCommand(context_, "SET %s %s", key.c_str(), value.c_str(), value.size());
+  clean_reply();
+}
+
+std::string RedisClient::redis_get_value(const std::string& key, int value_size) const {
+  reply_ = (redisReply*) redisCommand(context_, "GET %s", key.c_str());
+
+  std::string retval = std::string(reply_->str, value_size);
+  clean_reply();
+
+  return retval;
+}
+
 bool RedisClient::redis_increase(const std::string& key, const std::vector<float>& increments) const {
   reply_ = (redisReply*) redisCommand(context_, "WATCH %s", key.c_str());
   clean_reply();
