@@ -23,6 +23,7 @@
 #include "protocol.h"
 
 namespace po = boost::program_options;
+namespace bf = boost::filesystem;
 
 typedef std::unordered_map<ClassId, std::vector<double>> Normalizers;
 
@@ -37,8 +38,10 @@ struct Parameters {
     std::string redis_ip;
     std::string redis_port;
     int continue_fitting;
-    int token_start_index;
-    int batch_start_index;
+    int token_begin_index;
+    int token_end_index;
+    int batch_begin_index;
+    int batch_end_index;
     std::string command_key;
     std::string data_key;
     int debug_print;
@@ -55,8 +58,10 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     ("redis-ip", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
     ("redis-port", po::value(&p->redis_port)->default_value(""), "port of redis instance")
     ("continue-fitting", po::value(&p->continue_fitting)->default_value(0), "1 - continue fitting redis model, 0 - restart")
-    ("token-start-index", po::value(&p->token_start_index)->default_value(0), "index of token to init/norm from")
-    ("batch-start-index", po::value(&p->batch_start_index)->default_value(0), "index of batch to process from")
+    ("token-begin-index", po::value(&p->token_begin_index)->default_value(0), "index of token to init/norm from")
+    ("token-end-index", po::value(&p->token_end_index)->default_value(0), "index of token to init/norm to (excluding)")
+    ("batch-begin-index", po::value(&p->batch_begin_index)->default_value(0), "index of batch to process from")
+    ("batch-end-index", po::value(&p->batch_end_index)->default_value(0), "index of batch to process to (excluding)")
     ("command-key", po::value(&p->command_key)->default_value(""), "redis key to communicate with master")
     ("data-key", po::value(&p->data_key)->default_value(""), "redis key to exchange data with master")
     ("debug-print", po::value(&p->debug_print)->default_value(0), "1 - print debug info, 0 - not")
@@ -75,8 +80,10 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     std::cout << "redis-ip:          " << p->redis_ip << std::endl;
     std::cout << "redis-port:        " << p->redis_port << std::endl;
     std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
-    std::cout << "token-start-index: " << p->token_start_index << std::endl;
-    std::cout << "batch-start-index: " << p->batch_start_index << std::endl;
+    std::cout << "token-begin-index: " << p->token_begin_index << std::endl;
+    std::cout << "token-end-index: " << p->token_end_index << std::endl;
+    std::cout << "batch-begin-index: " << p->batch_begin_index << std::endl;
+    std::cout << "batch-end-index: " << p->batch_end_index << std::endl;
     std::cout << "data-key:          " << p->data_key << std::endl << std::endl;
   }
 }
@@ -158,62 +165,82 @@ int main(int argc, char* argv[]) {
 
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
-  bool debug_print = (params.debug_print == 1);
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
-  std::string current_cmd = redis_client.get_value(params.command_key);
-  if (debug_print) {
-    std::cout << "Read from key: " << params.command_key << ", value: " << current_cmd << std::endl;
-  }
+  try {
 
-  /*
-  std::vector<std::string> topics;
-  for (int i = 0; i < params.num_topics; ++i) {
-    topics.push_back("topic_" + std::to_string(i));
-  }
 
-  std::vector<Token> tokens;
-  std::ifstream fin;  
+    // ВЫСТАВИТЬ ЗДЕСЬ КОНЕЦ СТАРТА И ЖДАТЬ НАЧАЛА ИНИЦИАЛИЗАЦИИ
 
-  fin.open(params.vocab_path);
 
-  std::string line;
-  while (std::getline(fin, line)) {
-    tokens.push_back(Token(DefaultClass, line));
-  }
-  std::cout << "Number of tokens is " << tokens.size() << std::endl;
 
-  fin.close();
 
-  float n = 0.0f;
-  for(const auto& entry : boost::make_iterator_range(boost::filesystem::directory_iterator(params.batches_dir_path), { })) {
-    artm::Batch batch;
-    Helpers::LoadBatch(entry.path().string(), &batch);
-    for (const auto& item : batch.item()) {
-      for (float val : item.token_weight()) {
-        n += val;
+
+
+    bool debug_print = (params.debug_print == 1);
+
+    std::string current_cmd = redis_client.get_value(params.command_key);
+    if (debug_print) {
+      std::cout << "Read from key: " << params.command_key << ", value: " << current_cmd << std::endl;
+    }
+
+    std::vector<std::string> topics;
+    for (int i = 0; i < params.num_topics; ++i) {
+      topics.push_back("topic_" + std::to_string(i));
+    }
+
+    auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
+    auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
+
+    bool continue_fitting = (params.continue_fitting == 1);
+    std::ifstream fin;
+    fin.open(params.vocab_path);
+
+    std::string line;
+    int counter = 0;
+    auto zero_vector = std::vector<float>(params.num_topics, 0.0f);
+    while (std::getline(fin, line)) {
+      auto token = Token(DefaultClass, line);
+      bool add_token_to_redis = false;
+      if (counter >= params.token_begin_index && counter < params.token_end_index) {
+        add_token_to_redis = !continue_fitting;
       }
+      p_wt->AddToken(token, add_token_to_redis, zero_vector);
+      n_wt->AddToken(token, add_token_to_redis,
+        add_token_to_redis ? Helpers::GenerateRandomVector(params.num_topics, token) : zero_vector);
     }
-  }
-  std::cout << "Total number of token slots is: " << n << std::endl;
+    fin.close();
 
-  auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
-  auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
+    double n = 0.0f;
+    counter = 0;
+    for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
+      if (counter >= params.batch_begin_index && counter < params.batch_end_index) {
+        artm::Batch batch;
+        Helpers::LoadBatch(entry.path().string(), &batch);
+        for (const auto& item : batch.item()) {
+          for (float val : item.token_weight()) {
+            n += static_cast<double>(val);
+          }
+        }
+      }
+      ++counter;
+    }
 
-  bool continue_fitting = (params.continue_fitting == 1);
-  for (const auto& token : tokens) {
-    p_wt->AddToken(token, !continue_fitting);
-    n_wt->AddToken(token, !continue_fitting);
-  }
+    redis_client.set_value(params.data_key, std::to_string(n));
+    
+// ЗДЕСЬ И ВЕЗДЕ НАДО ПРОВЕРЯТЬ СОДЕРЖИМОЕ, ПРЕЖДЕ ЧЕМ ПИСАТЬ
+    //redis_client.set_value(params.command_key, FINISH_INITIALIZATION);
 
+
+
+/*
   if (!continue_fitting) {
-    for (int i = 0; i < tokens.size(); ++i) {
-      n_wt->increase(i, Helpers::GenerateRandomVector(params.num_topics, tokens[i]));
-    }
-
     Normalize(p_wt, *n_wt);
   }
+  */
 
+
+  /*
   Blas* blas = Blas::builtin();
   for (int iter = 0; iter < params.num_outer_iters; ++iter) {
     float perplexity_value = 0.0f;
@@ -227,8 +254,12 @@ int main(int argc, char* argv[]) {
   }
   */
 
-  std::cout << "Executor with cmd key '" << params.command_key
-            << "' has finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC
-            << " sec." << std::endl;
+    std::cout << "Executor with cmd key '" << params.command_key
+              << "' has finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC
+              << " sec." << std::endl;
+    redis_client.set_value(params.command_key, FINISH_TERMINATION);
+  } catch (...) {
+    redis_client.set_value(params.command_key, FINISH_TERMINATION);
+  }
   return 0;
 }

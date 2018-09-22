@@ -51,6 +51,7 @@ class RedisPhiMatrix : public PhiMatrix{
 
   virtual void Clear() { };
   virtual int AddToken(const Token& token, bool flag);
+  int AddToken(const Token& token, bool flag, const std::vector<float>& values);
 
   virtual ~RedisPhiMatrix() { }
 

@@ -1,12 +1,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <unistd.h>
 
 #include <array>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <sstream>
+#include <utility>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -67,6 +69,13 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   std::cout << "debug-print:      " << p->debug_print << std::endl;
 }
 
+
+
+
+
+// ЗАМЕНИТЬ НА std::system, убрать <array>
+
+
 std::string exec(const char* cmd) {
   std::array<char, 128> buffer;
   std::string result;
@@ -83,16 +92,17 @@ std::string exec(const char* cmd) {
   return result;
 }
 
-std::vector<int> GetStartIndices(int num_executors, int size) {
-  std::vector<int> retval;
+std::vector<std::pair<int, int>> GetIndices(int num_executors, int size) {
+  std::vector<std::pair<int, int>> retval;
   const int step = size / num_executors;
   for (int i = 0; i < num_executors; ++i) {
-    retval.push_back(i * step);
+    int end = (i == num_executors - 1) ? size : (i + 1) * step;
+    retval.push_back(std::make_pair(i * step, end));
   }
   return retval;
 }
 
-
+/*
 void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
   for (int i = 0; i < p_wt.topic_size(); ++i) {
     std::vector<std::pair<Token, float>> pairs;
@@ -109,6 +119,29 @@ void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
     }
   }
 }
+*/
+
+bool CheckFinishedOrTerminated(const std::string& old_flag, const std::string& new_flag) {
+  while (true) {
+    /*
+    bool executors_finished = true;
+    bool terminated = false;
+    for (const auto& key : exucutor_command_keys) {
+      auto reply = redis_client.get_value(key);
+      if (reply == FINISH_TERMINATION) {
+        terminated = true;
+        break;
+      }
+    }*/
+
+    usleep(2000);
+  }
+  return false;
+}
+
+bool CheckTerminatedAndUpdate(const std::string& flag) {
+return false;
+}
 
 
 int main(int argc, char* argv[]) {
@@ -117,41 +150,42 @@ int main(int argc, char* argv[]) {
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
-  std::shared_ptr<RedisClient> redis_client = std::shared_ptr<RedisClient>(
-    new RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100));
+  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
 
   // step 0: prepare parameters
   std::string res = exec((std::string("wc -l ") + params.vocab_path).c_str());
   const int vocab_size = std::stoi(res.substr(0, res.find(" ", 5)));
   std::cout << "Total vocabulary size: " << vocab_size << std::endl;
 
-  std::vector<int> token_start_indices = GetStartIndices(params.num_executors, vocab_size);
+  auto token_begin_end_indices = GetIndices(params.num_executors, vocab_size);
 
   res = exec((std::string("ls -lt ") + params.batches_dir_path + std::string(" | wc -l")).c_str());
   const int num_batches = std::stoi(res.substr(res.rfind(" "), res.size())) - 1;
   std::cout << "Total number of batches: " << num_batches << std::endl;
 
-  std::vector<int> batch_start_indices = GetStartIndices(params.num_executors, num_batches);
+  auto batch_begin_end_indices = GetIndices(params.num_executors, num_batches);
 
   std::vector<std::string> exucutor_command_keys;
   std::vector<std::string> exucutor_data_keys;
 
-  std::cout << "Executors start indices: " << std::endl;
+  std::cout << std::endl << "Executors start indices: " << std::endl;
   for (int i = 0; i < params.num_executors; ++i) {
     std::cout << "Executor " << i
-              << ", token start index: " << token_start_indices[i]
-              << ", batch start index: " << batch_start_indices[i]
+              << ", token indices: (" << token_begin_end_indices[i].first
+              << ", " << token_begin_end_indices[i].second << ")"
+              << ", batch indices: " << batch_begin_end_indices[i].first
+              << ", " << batch_begin_end_indices[i].second << ")"
               << std::endl;
 
     exucutor_command_keys.push_back(kEscChar + std::string("exec-cmd-") + std::to_string(i));
     exucutor_data_keys.push_back(kEscChar + std::string("exec-data-") + std::to_string(i));
   }
-  std::cout << "===============" << std::endl << std::endl;
+  std::cout << std::endl << std::endl;
 
   // step 1: create communication slots, set initialization command and start executors
   for (int i = 0; i < params.num_executors; ++i) {
-    redis_client->set_value(exucutor_command_keys[i], START_INITIALIZATION);
-    redis_client->set_value(exucutor_data_keys[i], "");
+    redis_client.set_value(exucutor_command_keys[i], START_GLOBAL_START);
+    redis_client.set_value(exucutor_data_keys[i], "");
 
     std::stringstream start_executor_cmd;
     start_executor_cmd << "./executor_main"
@@ -163,14 +197,21 @@ int main(int argc, char* argv[]) {
                        << " --redis-port " << params.redis_port
                        << " --continue-fitting " << params.continue_fitting
                        << " --debug-print " << params.debug_print
-                       << " --token-start-index " << token_start_indices[i]
-                       << " --batch-start-index " << batch_start_indices[i]
+                       << " --token-begin-index " << token_begin_end_indices[i].first
+                       << " --token-end-index " << token_begin_end_indices[i].second
+                       << " --batch-begin-index " << batch_begin_end_indices[i].first
+                       << " --batch-end-index " << batch_begin_end_indices[i].second
                        << " --command-key '" << exucutor_command_keys[i] << "'"
                        << " --data-key '" << exucutor_data_keys[i] << "'";
 
     std::system(start_executor_cmd.str().c_str());
   }
 
+ // проверить, что глобально все стартанули и ждут начала (чек с таймаутом - 1-2 сек)
+
+  if (!CheckFinishedOrTerminated(START_INITIALIZATION, FINISH_INITIALIZATION)) { return -1; }
+
+  if (!CheckTerminatedAndUpdate(START_NORMALIZATION)) { return -2; }
 
   // ещё каждый должен посчитать размер своей части и вернуть
 
