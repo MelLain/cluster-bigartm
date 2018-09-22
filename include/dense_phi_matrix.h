@@ -86,7 +86,7 @@ class DensePhiMatrix : public PhiMatrixFrame {
   virtual void increase(int token_id, const std::vector<float>& increment);  // must be thread-safe
 
   virtual void Clear();
-  virtual int AddToken(const Token& token);
+  virtual int AddToken(const Token& token, bool flag);
 
   void Reset();
   void Reshape(const PhiMatrix& phi_matrix);

@@ -16,8 +16,8 @@ int RedisPhiMatrix::token_index(const Token& token) const {
   return token_collection_.token_id(token);
 }
 
+// ATTN: this method should be used only for debugging, it's too slow for learning process!
 float RedisPhiMatrix::get(int token_id, int topic_id) const {
-  //throw std::runtime_error("Single get is forbidden");
   std::vector<float> buffer = redis_client_->redis_get(to_key(token_id), topic_size());
   return buffer[topic_id];
 }
@@ -30,10 +30,7 @@ void RedisPhiMatrix::get(int token_id, std::vector<float>* buffer) const {
 }
 
 void RedisPhiMatrix::set(int token_id, int topic_id, float value) {
-  throw std::runtime_error("Single set is forbidden");
-  //std::vector<float> buffer = redis_get(to_key(token_id));
-  //buffer[topic_id] = value;
-  //redis_set(to_key(token_id), buffer);
+  throw std::runtime_error("Redis matrix does not support single set");
 }
 
 void RedisPhiMatrix::set(int token_id, const std::vector<float>& buffer) {
@@ -41,10 +38,7 @@ void RedisPhiMatrix::set(int token_id, const std::vector<float>& buffer) {
 }
 
 void RedisPhiMatrix::increase(int token_id, int topic_id, float increment) {
-  throw std::runtime_error("Single increase is forbidden");
-  //std::vector<float> buffer = redis_get(to_key(token_id));
-  //buffer[topic_id] += increment;
-  //redis_set(to_key(token_id), buffer);
+  throw std::runtime_error("Redis matrix does not support single increase");
 }
 
 void RedisPhiMatrix::increase(int token_id, const std::vector<float>& increment) {
@@ -54,7 +48,7 @@ void RedisPhiMatrix::increase(int token_id, const std::vector<float>& increment)
   }
 }
 
-int RedisPhiMatrix::AddToken(const Token& token) {
+int RedisPhiMatrix::AddToken(const Token& token, bool flag) {
   int token_id = token_collection_.token_id(token);
   if (token_id != -1) {
     return token_id;
@@ -62,6 +56,8 @@ int RedisPhiMatrix::AddToken(const Token& token) {
   
   int index = token_collection_.AddToken(token);
   auto temp = std::vector<float>(topic_size(), 0.0f);
-  redis_client_->redis_set(to_key(index), temp);
+  if (flag) {
+    redis_client_->redis_set(to_key(index), temp);
+  }
   return index;
 }

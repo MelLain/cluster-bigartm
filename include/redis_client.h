@@ -33,6 +33,7 @@ class RedisClient {
     clean_reply();
   }
 
+  // both set and get operations are atomic by default
   void redis_set(const std::string& key, const std::vector<float>& values) const;
 
   // compiler should return rvalue without coping, see

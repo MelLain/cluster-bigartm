@@ -30,7 +30,7 @@ class PhiMatrix {
   virtual void increase(int token_id, const std::vector<float>& increment) = 0;  // must be thread-safe
 
   virtual void Clear() = 0;
-  virtual int AddToken(const Token& token) = 0;
+  virtual int AddToken(const Token& token, bool flag = true) = 0;
 
   virtual std::shared_ptr<PhiMatrix> Duplicate() const = 0;
   virtual ~PhiMatrix() { }

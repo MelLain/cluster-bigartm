@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(large_artm)
+project(cluster-bigartm)
 
 include(FindProtobuf)
 find_package(Protobuf REQUIRED)
@@ -15,15 +15,18 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 set(CMAKE_CXX_COMPILER "g++")
 
+include_directories(./include)
+include_directories(./3rdparty)
+
 set(SOURCE_LIB
-  blas.cc
-  dense_phi_matrix.cc
-  helpers.cc
-  messages.pb.cc
-  processor_helpers.cc
-  redis_phi_matrix.cc
-  token.cc
-  redis_client.cc
+  src/blas.cc
+  src/dense_phi_matrix.cc
+  src/helpers.cc
+  src/messages.pb.cc
+  src/processor_helpers.cc
+  src/redis_phi_matrix.cc
+  src/token.cc
+  src/redis_client.cc
 )
 
 set(CMAKE_CXX_STANDARD 11)
@@ -32,10 +35,8 @@ set(CXX_STANDARD_REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-lboost_filesystem -lboost_system -lboost_program_options")
 
-set(SOURCE_EXE srcmain.cc)
+add_library(cluster_bigartm_lib STATIC ${SOURCE_LIB})
 
-add_library(help_lib STATIC ${SOURCE_LIB})
+add_executable(executor executor.cc)
 
-add_executable(srcmain ${SOURCE_EXE})
-
-target_link_libraries(srcmain help_lib ${Boost_LIBRARIES} ${PROTOBUF_LIBRARY} -lhiredis)
+target_link_libraries(executor cluster_bigartm_lib ${Boost_LIBRARIES} ${PROTOBUF_LIBRARY} -lhiredis)

@@ -39,6 +39,7 @@ struct Parameters {
     std::string redis_ip;
     std::string redis_port;
     std::string show_top_tokens;
+    std::string continue_fitting;
   };
 
   void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
@@ -53,6 +54,7 @@ struct Parameters {
       ("redis-ip,A", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
       ("redis-port,P", po::value(&p->redis_port)->default_value(""), "port of redis instance")
       ("show-top-tokens,S", po::value(&p->show_top_tokens)->default_value("0"), "1 - print top tokens, 0 - not")
+      ("continue-fitting,F", po::value(&p->continue_fitting)->default_value("0"), "1 - continue fitting redis model, 0 - restart")
       ;
 
     po::variables_map vm;
@@ -67,6 +69,7 @@ struct Parameters {
     std::cout << "redis-ip:       " << p->redis_ip << std::endl;
     std::cout << "redis-port:       " << p->redis_port << std::endl;
     std::cout << "show-top-tokens:       " << p->show_top_tokens << std::endl;
+    std::cout << "continue-fitting:       " << p->continue_fitting << std::endl;
   }
 
 
@@ -207,6 +210,11 @@ int main(int argc, char* argv[]) {
       new RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kNumConnections, kConnectionTimeout));
   }
 
+  bool continue_fitting = (params.continue_fitting == "1");
+  if (!use_redis && continue_fitting) {
+    throw std::runtime_error("Unable to continue fitting of non-redis model!");
+  }
+
   if (use_redis) {
     p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
     n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
@@ -216,15 +224,17 @@ int main(int argc, char* argv[]) {
   }
 
   for (const auto& token : tokens) {
-    p_wt->AddToken(token);
-    n_wt->AddToken(token);
+    p_wt->AddToken(token, !continue_fitting);
+    n_wt->AddToken(token, !continue_fitting);
   }
 
-  for (int i = 0; i < tokens.size(); ++i) {
-    n_wt->increase(i, Helpers::GenerateRandomVector(params.num_topics, tokens[i]));
-  }
+  if (!continue_fitting) {
+    for (int i = 0; i < tokens.size(); ++i) {
+      n_wt->increase(i, Helpers::GenerateRandomVector(params.num_topics, tokens[i]));
+    }
 
-  Normalize(p_wt, *n_wt);
+    Normalize(p_wt, *n_wt);
+  }
 
   Blas* blas = Blas::builtin();
   for (int iter = 0; iter < params.num_outer_iters; ++iter) {

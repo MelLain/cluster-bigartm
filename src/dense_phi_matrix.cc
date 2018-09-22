@@ -261,7 +261,7 @@ void DensePhiMatrix::Clear() {
   PhiMatrixFrame::Clear();
 }
 
-int DensePhiMatrix::AddToken(const Token& token) {
+int DensePhiMatrix::AddToken(const Token& token, bool flag) {
   int token_id = token_index(token);
   if (token_id != -1) {
     return token_id;
@@ -282,7 +282,7 @@ void DensePhiMatrix::Reset() {
 void DensePhiMatrix::Reshape(const PhiMatrix& phi_matrix) {
   Clear();
   for (int token_id = 0; token_id < phi_matrix.token_size(); ++token_id) {
-    this->AddToken(phi_matrix.token(token_id));
+    this->AddToken(phi_matrix.token(token_id), true);
   }
 }
 

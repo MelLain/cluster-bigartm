@@ -50,7 +50,7 @@ class RedisPhiMatrix : public PhiMatrix{
   virtual void increase(int token_id, const std::vector<float>& increment);
 
   virtual void Clear() { };
-  virtual int AddToken(const Token& token);
+  virtual int AddToken(const Token& token, bool flag);
 
   virtual ~RedisPhiMatrix() { }
 
