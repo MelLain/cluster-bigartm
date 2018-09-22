@@ -1,8 +1,10 @@
 .DS_Store
-CMakeCache.txt
+*.txt
 CMakeFiles/*
 Makefile
 cmake_install.cmake
-libhelp_lib.a
-srcmain
+*.a
+*.o
+executor_main
+master_main
 *~

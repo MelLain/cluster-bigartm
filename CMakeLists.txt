@@ -37,6 +37,6 @@ set(CMAKE_CXX_FLAGS "-lboost_filesystem -lboost_system -lboost_program_options")
 
 add_library(cluster_bigartm_lib STATIC ${SOURCE_LIB})
 
-add_executable(executor executor.cc)
+add_executable(executor_main executor_main.cc)
 
-target_link_libraries(executor cluster_bigartm_lib ${Boost_LIBRARIES} ${PROTOBUF_LIBRARY} -lhiredis)
+target_link_libraries(executor_main cluster_bigartm_lib ${Boost_LIBRARIES} ${PROTOBUF_LIBRARY} -lhiredis)
