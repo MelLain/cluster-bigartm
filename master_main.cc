@@ -1,6 +1,5 @@
 #include <cstdio>
 #include <cstdlib>
-#include <ctime>
 #include <unistd.h>
 
 #include <array>
@@ -17,6 +16,7 @@
 #include "phi_matrix.h"
 #include "protocol.h"
 #include "redis_client.h"
+#include "redis_phi_matrix.h"
 #include "token.h"
 
 namespace po = boost::program_options;
@@ -85,6 +85,7 @@ std::string exec(const char* cmd) {
   return result;
 }
 
+
 std::vector<std::pair<int, int>> GetIndices(int num_executors, int size) {
   std::vector<std::pair<int, int>> retval;
   const int step = size / num_executors;
@@ -95,24 +96,6 @@ std::vector<std::pair<int, int>> GetIndices(int num_executors, int size) {
   return retval;
 }
 
-/*
-void PrintTopTokens(const PhiMatrix& p_wt, int num_tokens = 10) {
-  for (int i = 0; i < p_wt.topic_size(); ++i) {
-    std::vector<std::pair<Token, float>> pairs;
-    for (int j = 0; j < p_wt.token_size(); ++j) {
-      pairs.push_back(std::make_pair(p_wt.token(j), p_wt.get(j, i)));
-    }
-    std::sort(pairs.begin(), pairs.end(),
-              [](const std::pair<Token, float>& p1, const std::pair<Token, float>& p2) {
-                return p1.second > p2.second;
-              });
-    std::cout << "\nTopic: " << p_wt.topic_name(i) << std::endl;
-    for (int j = 0; j < num_tokens; ++j) {
-      std::cout << pairs[j].first.keyword << " (" << pairs[j].second << ")\n";
-    }
-  }
-}
-*/
 
 bool CheckFinishedOrTerminated(const RedisClient& redis_client,
                                const std::vector<std::string>& command_keys,
@@ -122,24 +105,21 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
   int time_passed = 0;
   bool terminated = false;
   while (true) {
-    if ((timeout > 0 && time_passed > timeout) || terminated) {
-      break;
-    }
-
     int executors_finished = 0;
     for (const auto& key : command_keys) {
       auto reply = redis_client.get_value(key);
-      if (reply == FINISH_TERMINATION) {
-        terminated = true;
-        break;
-      }
-
       if (reply == old_flag) {
         break;
       }
 
       if (reply == new_flag) {
         ++executors_finished;
+        continue;
+      }
+
+      if (reply == FINISH_TERMINATION) {
+        terminated = true;
+        break;
       }
     }
 
@@ -147,11 +127,16 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
       return true;
     }
 
+    if ((timeout > 0 && time_passed > timeout) || terminated) {
+      break;
+    }
+
     usleep(2000);
     time_passed += 2000;
   }
   return false;
 }
+
 
 // this function firstly check the availability of executer and then send him new command,
 // it's not fully safe, as if the execiter fails in between get and set, it will cause
@@ -174,15 +159,105 @@ bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
 }
 
 
-int main(int argc, char* argv[]) {
-  const clock_t begin_time = clock();
+// protocol:
+// 1) set everyone START_NORMALIZATION flag
+// 2) wait for everyone to set FINISH_NORMALIZATION flag
+// 3) read results from data slots
+// 4) merge results and put final n_t into data slots
+// 5) set everyone START_NORMALIZATION flag
+// 6) wait for everyone to set FINISH_NORMALIZATION flag
+bool NormalizeNwt(const RedisClient& redis_client,
+                  const std::vector<std::string>& command_keys,
+                  const std::vector<std::string>& data_keys,
+                  int num_topics) {
+  if (!CheckNonTerminatedAndUpdate(redis_client, command_keys, START_NORMALIZATION)) {
+    return false;
+  }
 
+  if (!CheckFinishedOrTerminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
+    return false;
+  }
+
+  Normalizers n_t;
+  Normalizers helper;
+  for (const auto& key : data_keys) {
+    helper = redis_client.get_hashmap(key, num_topics);
+    for (const auto& kv : helper) {
+      auto iter = n_t.find(kv.first);
+      if (iter == n_t.end()) {
+        n_t.emplace(kv);
+      } else {
+        for (int i = 0; i < kv.second.size(); ++i) {
+          iter->second[i] += kv.second[i];
+        }
+      }
+    }
+    helper.clear();
+  }
+
+  // ToDo(MelLain): maybe it'll be better to keep only one version of n_t for
+  //                all executers, need to be checked with large number of topics
+  for (const auto& key : data_keys) {
+    redis_client.set_hashmap(key, n_t);
+  }
+
+  if (!CheckNonTerminatedAndUpdate(redis_client, command_keys, START_NORMALIZATION)) {
+    return false;
+  }
+
+  if (!CheckFinishedOrTerminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
+    return false;
+  }
+
+  return true;
+}
+
+
+// ToDo(MelLain): rewrite this function, as it is very inefficient and hacked now
+void PrintTopTokens(RedisClient& redis_client,
+                    const std::string& vocab_path,
+                    int num_topics,
+                    int num_tokens = 10) {
+  std::vector<std::string> topics;
+  for (int i = 0; i < num_topics; ++i) {
+    topics.push_back("topic_" + std::to_string(i));
+  }
+
+  auto p_wt = RedisPhiMatrix(ModelName("pwt"), topics, redis_client);
+  auto zero_vector = std::vector<float>(num_topics, 0.0f);
+
+  std::ifstream fin;
+  std::string line;
+  fin.open(vocab_path);
+  while (std::getline(fin, line)) {
+    p_wt.AddToken(Token(DefaultClass, line), false, zero_vector);
+  }
+  fin.close();
+
+  for (int i = 0; i < p_wt.topic_size(); ++i) {
+    std::vector<std::pair<Token, float>> pairs;
+    for (int j = 0; j < p_wt.token_size(); ++j) {
+      pairs.push_back(std::make_pair(p_wt.token(j), p_wt.get(j, i)));
+    }
+    std::sort(pairs.begin(), pairs.end(),
+              [](const std::pair<Token, float>& p1, const std::pair<Token, float>& p2) {
+                return p1.second > p2.second;
+              });
+    std::cout << "\nTopic: " << p_wt.topic_name(i) << std::endl;
+    for (int j = 0; j < num_tokens; ++j) {
+      std::cout << pairs[j].first.keyword << " (" << pairs[j].second << ")\n";
+    }
+  }
+}
+
+
+int main(int argc, char* argv[]) {
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
 
-  // step 0: prepare parameters and keys
+  // prepare parameters and keys
   std::string res = exec((std::string("wc -l ") + params.vocab_path).c_str());
   const int vocab_size = std::stoi(res.substr(0, res.find(" ", 5)));
   std::cout << "Total vocabulary size: " << vocab_size << std::endl;
@@ -210,10 +285,10 @@ int main(int argc, char* argv[]) {
     executor_command_keys.push_back(kEscChar + std::string("exec-cmd-") + std::to_string(i));
     executor_data_keys.push_back(kEscChar + std::string("exec-data-") + std::to_string(i));
   }
-  std::cout << std::endl << std::endl;
+  std::cout << std::endl;
 
   try {
-    // step 1: create communication slots, set and check start cmd flag, start executors and proceed init
+    // create communication slots, set and check start cmd flag, start executors and proceed init
     for (int i = 0; i < params.num_executors; ++i) {
       redis_client.set_value(executor_command_keys[i], START_GLOBAL_START);
       redis_client.set_value(executor_data_keys[i], "");
@@ -241,7 +316,6 @@ int main(int argc, char* argv[]) {
 
     // we give 1.0 sec to all executers to start, if even one of them
     // didn't response, it means, that it had failed to start
-    
     bool ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
                                         START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
     if (!ok) { throw std::runtime_error("Step 0, got termination status"); }
@@ -251,28 +325,48 @@ int main(int argc, char* argv[]) {
 
     ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
                                    START_INITIALIZATION, FINISH_INITIALIZATION);
-    
-
-
-
-
-    // UNCOMMENT IN FUTURE, DON'T FORGET TO HANDLE FINAL FINISH STATUS AS SUCCESS
-    //if (!ok) { throw std::runtime_error("Step 1 finish, got termination status"); }
+    if (!ok) { throw std::runtime_error("Step 1 finish, got termination status"); }
 
     double n = 0.0;
     for (const auto& key : executor_data_keys) {
       n += std::stod(redis_client.get_value(key));
     }
+
     std::cout << std::endl
               << "All executors have started! Total number of token slots in collection: "
               << n << std::endl;
 
+    if (!params.continue_fitting) {
+      if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
+        throw std::runtime_error("Step 2, got termination status");
+      }
+    }
 
+    // EM-iterations
+    for (int iteration = 0; iteration < params.num_outer_iters; ++iteration) {
+      ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_ITERATION);
+      if (!ok) { throw std::runtime_error("Step 3 start, got termination status"); }
 
-  // step 3: EM-iterations
+      ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
+                                     START_ITERATION, FINISH_ITERATION);
+      if (!ok) { throw std::runtime_error("Step 3 intermediate, got termination status"); }
 
+      double perplexity_value = 0.0;
+      for (const auto& key : executor_data_keys) {
+        perplexity_value += std::stod(redis_client.get_value(key));
+      }
 
-  // step 4: finalization
+      if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
+        throw std::runtime_error("Step 3 finish, got termination status");
+      }
+
+      std::cout << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
+    }
+
+    // finalization (correct in any way)
+    for (const auto& key : executor_command_keys) {
+      redis_client.set_value(key, START_TERMINATION);
+    }
 
   } catch (...) {
     for (const auto& key : executor_command_keys) {
@@ -280,12 +374,12 @@ int main(int argc, char* argv[]) {
     }
     throw;
   }
+  CheckFinishedOrTerminated(redis_client, executor_command_keys, START_TERMINATION, FINISH_TERMINATION);
 
-  // normal termination
-  for (const auto& key : executor_command_keys) {
-    redis_client.set_value(key, START_TERMINATION);
+  if (params.show_top_tokens) {
+    PrintTopTokens(redis_client, params.vocab_path, params.num_topics);
   }
 
-  std::cout << "Finished! Elapsed time: " << float(clock() - begin_time) / CLOCKS_PER_SEC << " sec." << std::endl;
+  std::cout << "Model fitteing is finished!" << std::endl;
   return 0;
 }

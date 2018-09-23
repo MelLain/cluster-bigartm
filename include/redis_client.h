@@ -42,6 +42,9 @@ class RedisClient {
   void set_value(const std::string& key, const std::string& value) const;
   std::string get_value(const std::string& key) const;
 
+  void set_hashmap(const std::string& key, const Normalizers& hashmap) const;
+  Normalizers get_hashmap(const std::string& key, int values_size) const;
+
   // this operation is atomic, see https://redis.io/topics/transactions
   bool increase_values(const std::string& key, const std::vector<float>& increments) const;
 
