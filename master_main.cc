@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
+#include <signal.h>
 
 #include <array>
 #include <iostream>
@@ -24,6 +25,12 @@
 namespace po = boost::program_options;
 
 typedef std::vector<std::vector<std::string>> Keys;
+
+volatile sig_atomic_t signal_flag = 0;
+
+void signal_handler(int sig) {
+  signal_flag = 1;
+}
 
 struct Parameters {
   int num_topics;
@@ -137,6 +144,11 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
   int time_passed = 0;
   bool terminated = false;
   while (true) {
+    if (signal_flag) {
+      std::cout << "SIGINT has been caught, start terminating" << std::endl;
+      return false;
+    }
+
     int executors_finished = 0;
     for (const auto& keys : command_keys) {
       for (const auto& key : keys) {
@@ -178,6 +190,11 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
 bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
                                  const Keys& command_keys,
                                  const std::string& flag) {
+  if (signal_flag) {
+    std::cout << "SIGINT has been caught, start terminating" << std::endl;
+    return false;
+  }
+
   for (const auto& keys : command_keys) {
     for (const auto& key : keys) {
       auto reply = redis_client.get_value(key);
@@ -297,6 +314,8 @@ void PrintTopTokens(RedisClient& redis_client,
 // (executors) can be killed on sinngle node via command:
 // ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs  kill -9
 int main(int argc, char* argv[]) {
+  signal(SIGINT, signal_handler);
+
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 

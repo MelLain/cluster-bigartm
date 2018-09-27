@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <signal.h>
 
 #include <algorithm>
 #include <iostream>
@@ -27,6 +28,12 @@ namespace bf = boost::filesystem;
 
 static const int kConnTimeout = 100;
 static const int kNumRetries = 10;
+
+volatile sig_atomic_t signal_flag = 0;
+
+void signal_handler(int sig) {
+  signal_flag = 1;
+}
 
 struct Parameters {
     int num_topics;
@@ -88,6 +95,11 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
 
 
 bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
+  if (signal_flag) {
+    std::cout << "SIGINT has been caught, start terminating" << std::endl;
+    return false;
+  }
+
   auto reply = redis_client.get_value(key);
   if (reply == START_TERMINATION) {
     return false;
@@ -99,6 +111,11 @@ bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client, const std::str
 
 bool WaitForFlag(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
   while (true) {
+    if (signal_flag) {
+      std::cout << "SIGINT has been caught, start terminating" << std::endl;
+      return false;
+    }
+
     auto reply = redis_client.get_value(key);
     if (reply == START_TERMINATION) {
       break;
@@ -231,6 +248,8 @@ void ProcessEStep(const artm::Batch& batch,
 
 
 int main(int argc, char* argv[]) {
+  signal(SIGINT, signal_handler);
+
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
