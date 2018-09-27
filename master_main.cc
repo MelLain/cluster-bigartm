@@ -293,6 +293,9 @@ void PrintTopTokens(RedisClient& redis_client,
 }
 
 
+// In case of fault of master without exceptions all sub-processes
+// (executors) can be killed on sinngle node via command:
+// ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs  kill -9
 int main(int argc, char* argv[]) {
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
@@ -333,8 +336,8 @@ int main(int argc, char* argv[]) {
                 << ", " << batch_begin_end_indices[i][e].second << ")"
                 << std::endl;
 
-      executor_command_keys[i].push_back(kEscChar + std::string("cmd-") + std::to_string(e) + ":" + std::to_string(i));
-      executor_data_keys[i].push_back(kEscChar + std::string("dat-") + std::to_string(e) + ":" + std::to_string(i));
+      executor_command_keys[i].push_back(kEscChar + std::string("cmd-") + std::to_string(i) + ":" + std::to_string(e));
+      executor_data_keys[i].push_back(kEscChar + std::string("dat-") + std::to_string(i) + ":" + std::to_string(e));
     }
   }
   std::cout << std::endl;

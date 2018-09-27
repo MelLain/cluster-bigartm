@@ -4,9 +4,11 @@
 #include <string>
 #include <sstream>
 
-#include "hiredis/hiredis.h"
+#include "redis_cluster/hirediscommand.h"
 
 #include "common.h"
+
+using namespace RedisCluster;
 
 class RedisClient {
  public:
@@ -15,20 +17,11 @@ class RedisClient {
       , timeout_(timeout)
       , reply_(nullptr)
   {
-    context_ = redisConnect(ip.c_str(), port);
-    if (context_->err == true) {
-        std::stringstream ss;
-        ss << "Error while creating context: " << context_->errstr;
-        throw std::runtime_error(ss.str());
-    }
-
-    if (context_ == nullptr) {
-        throw std::runtime_error("Cannot allocate Redis context");
-    }
+    context_ = HiredisCommand<>::createCluster(ip.c_str(), port);
   }
 
   ~RedisClient() {
-    redisFree(context_);
+    delete context_;
     clean_reply();
   }
 
@@ -60,5 +53,5 @@ class RedisClient {
   int timeout_;
 
   mutable redisReply* reply_;
-  redisContext* context_;
+  Cluster<redisContext>* context_;
 };
