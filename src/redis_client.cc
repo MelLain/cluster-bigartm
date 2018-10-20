@@ -71,11 +71,11 @@ Normalizers RedisClient::get_hashmap(const std::string& key, int values_size) co
 }
 
 bool RedisClient::increase_values(const std::string& key, const std::vector<float>& increments) const {
-  reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "WATCH %s", key.c_str());
-  clean_reply();
-
   // optimistic locking
   for (int i = 0; i < max_retries_; ++i) {
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "WATCH %s", key.c_str());
+    clean_reply();
+
     reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "GET %s", key.c_str());
     if (reply_->type == REDIS_REPLY_NIL) {
       clean_reply();
@@ -93,8 +93,13 @@ bool RedisClient::increase_values(const std::string& key, const std::vector<floa
     auto val_ptr = reinterpret_cast<const char*>(&(buffer[0]));
     auto val_size = (size_t) (buffer.size() * sizeof(float));
 
-    reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "SET %s %b", key.c_str(), val_ptr, val_size);
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "MULTI");
+    clean_reply();
 
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "SET %s %b", key.c_str(), val_ptr, val_size);
+    clean_reply();
+
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "EXEC");
     if (reply_->type == REDIS_REPLY_NIL) {
       clean_reply();
       continue;
@@ -104,5 +109,6 @@ bool RedisClient::increase_values(const std::string& key, const std::vector<floa
     return true;
   }
 
+  std::cout << "Increments for key " << key << " were not applied" << std::endl;
   return false;
 }
