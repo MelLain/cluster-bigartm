@@ -8,3 +8,7 @@ cmake_install.cmake
 executor_main
 master_main
 *~
+appendonly.aof
+dump.rdb
+redis-nodes.conf
+redis.log

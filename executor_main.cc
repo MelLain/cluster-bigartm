@@ -91,20 +91,27 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
 }
 
 
-bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
+bool CheckNonTerminatedAndUpdate(
+    const RedisClient& redis_client,
+    const std::string& key,
+    const std::string& flag,
+    bool force = false) {
   if (signal_flag) {
     std::cout << "SIGINT has been caught, start terminating" << std::endl;
     return false;
   }
 
+  if (!force) {
   auto reply = redis_client.get_value(key);
-  if (reply == START_TERMINATION) {
-    return false;
+    if (reply == START_TERMINATION) {
+      return false;
+    }
   }
 
   redis_client.set_value(key, flag);
   return true;
 }
+
 
 bool WaitForFlag(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
   while (true) {
@@ -255,7 +262,7 @@ int main(int argc, char* argv[]) {
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
   try {
-    if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START)) {
+    if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START, true)) {
       throw std::runtime_error("Step 0, got termination command");
     };
 

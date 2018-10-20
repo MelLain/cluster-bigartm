@@ -48,7 +48,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     ("help", "Show help")
     ("num-topics", po::value(&p->num_topics)->default_value(1), "number of topics")
     ("num-outer-iter", po::value(&p->num_outer_iters)->default_value(1), "number of collection passes")
-    ("num-inner-iter", po::value(&p->num_inner_iters)->default_value(1), "number of document passes")
     ("executor-ids-path", po::value(&p->executor_ids_path)->default_value("."), "path to ids of all working processes")
     ("batches-dir-path", po::value(&p->batches_dir_path)->default_value("."), "path to batches with documents")
     ("vocab-path", po::value(&p->vocab_path)->default_value("."), "path to file with vocabulary")
@@ -56,7 +55,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     ("redis-port", po::value(&p->redis_port)->default_value(""), "port of redis instance")
     ("show-top-tokens", po::value(&p->show_top_tokens)->default_value(0), "1 - print top tokens, 0 - not")
     ("continue-fitting", po::value(&p->continue_fitting)->default_value(0), "1 - continue fitting redis model, 0 - restart")
-    ("debug-print", po::value(&p->debug_print)->default_value(0), "1 - print parameters of executors, 0 - not")
     ;
 
   po::variables_map vm;
@@ -65,7 +63,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
 
   std::cout << "num-topics:        " << p->num_topics << std::endl;
   std::cout << "num-outer-iter:    " << p->num_outer_iters << std::endl;
-  std::cout << "num-inner-iter:    " << p->num_inner_iters << std::endl;
   std::cout << "executor-ids-path: " << p->executor_ids_path << std::endl;
   std::cout << "batches-dir-path:  " << p->batches_dir_path << std::endl;
   std::cout << "vocab-path:        " << p->vocab_path << std::endl;
@@ -73,7 +70,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   std::cout << "redis-port:        " << p->redis_port << std::endl;
   std::cout << "show-top-tokens:   " << p->show_top_tokens << std::endl;
   std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
-  std::cout << "debug-print:       " << p->debug_print << std::endl;
 }
 
 std::vector<std::string> GetExecutorIds(const std::string& executor_ids_path) {
@@ -135,8 +131,8 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
 }
 
 
-// this function firstly check the availability of executer and then send him new command,
-// it's not fully safe, as if the execiter fails in between get and set, it will cause
+// this function firstly check the availability of executor and then send him new command,
+// it's not fully safe, as if the executor fails in between get and set, it will cause
 // endless loop during the next syncronozation
 bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
                                  const std::vector<std::string>& command_keys,
@@ -198,7 +194,7 @@ bool NormalizeNwt(const RedisClient& redis_client,
   }
 
   // ToDo(MelLain): maybe it'll be better to keep only one version of n_t for
-  //                all executers, need to be checked with large number of topics
+  //                all executors, need to be checked with large number of topics
   for (const auto& key : data_keys) {
     redis_client.set_hashmap(key, n_t);
   }
@@ -255,7 +251,7 @@ void PrintTopTokens(RedisClient& redis_client,
 
 // In case of fault of master without exceptions all sub-processes
 // (executors) can be killed on sinngle node via command:
-// ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs  kill -9
+// ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs kill -9
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
@@ -273,7 +269,7 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    // we give 1.0 sec to all executers to start, if even one of them
+    // we give 1.0 sec to all executors to start, if even one of them
     // didn't response, it means, that it had failed to start
     bool ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
                                         START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
@@ -303,6 +299,7 @@ int main(int argc, char* argv[]) {
 
     // EM-iterations
     for (int iteration = 0; iteration < params.num_outer_iters; ++iteration) {
+
       ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_ITERATION);
       if (!ok) { throw std::runtime_error("Step 3 start, got termination status"); }
 
@@ -339,6 +336,6 @@ int main(int argc, char* argv[]) {
     PrintTopTokens(redis_client, params.vocab_path, params.num_topics);
   }
 
-  std::cout << "Model fitteing is finished!" << std::endl;
+  std::cout << "Model fitting is finished!" << std::endl;
   return 0;
 }
