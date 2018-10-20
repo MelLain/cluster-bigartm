@@ -93,13 +93,13 @@ bool RedisClient::increase_values(const std::string& key, const std::vector<floa
     auto val_ptr = reinterpret_cast<const char*>(&(buffer[0]));
     auto val_size = (size_t) (buffer.size() * sizeof(float));
 
-    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "MULTI");
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "MULTI", key.c_str());
     clean_reply();
 
     reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "SET %s %b", key.c_str(), val_ptr, val_size);
     clean_reply();
 
-    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "EXEC");
+    reply_ = (redisReply*) HiredisCommand<>::Command(context_, "EXEC", key.c_str());
     if (reply_->type == REDIS_REPLY_NIL) {
       clean_reply();
       continue;

@@ -36,20 +36,19 @@ void signal_handler(int sig) {
 }
 
 struct Parameters {
-    int num_topics;
-    int num_inner_iters;
-    std::string batches_dir_path;
-    std::string vocab_path;
-    std::string redis_ip;
-    std::string redis_port;
-    int continue_fitting;
-    int token_begin_index;
-    int token_end_index;
-    int batch_begin_index;
-    int batch_end_index;
-    std::string command_key;
-    std::string data_key;
-    int debug_print;
+  int num_topics;
+  int num_inner_iters;
+  std::string batches_dir_path;
+  std::string vocab_path;
+  std::string redis_ip;
+  std::string redis_port;
+  int continue_fitting;
+  int token_begin_index;
+  int token_end_index;
+  int batch_begin_index;
+  int batch_end_index;
+  std::string executor_id;
+  int debug_print;
 };
 
 void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
@@ -67,8 +66,7 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     ("token-end-index", po::value(&p->token_end_index)->default_value(0), "index of token to init/norm to (excluding)")
     ("batch-begin-index", po::value(&p->batch_begin_index)->default_value(0), "index of batch to process from")
     ("batch-end-index", po::value(&p->batch_end_index)->default_value(0), "index of batch to process to (excluding)")
-    ("command-key", po::value(&p->command_key)->default_value(""), "redis key to communicate with master")
-    ("data-key", po::value(&p->data_key)->default_value(""), "redis key to exchange data with master")
+    ("executor-id", po::value(&p->executor_id)->default_value(""), "unique identifier of the process")
     ("debug-print", po::value(&p->debug_print)->default_value(0), "1 - print debug info, 0 - not")
     ;
 
@@ -77,7 +75,7 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   notify(vm);
 
   if (p->debug_print == 1) {
-    std::cout << std::endl << "======= Executor info, cmd key '" << p->command_key << "' =======" << std::endl;
+    std::cout << std::endl << "======= Executor info, id '" << p->executor_id << "' =======" << std::endl;
     std::cout << "num-topics:        " << p->num_topics << std::endl;
     std::cout << "num-inner-iter:    " << p->num_inner_iters << std::endl;
     std::cout << "batches-dir-path:  " << p->batches_dir_path << std::endl;
@@ -89,7 +87,6 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     std::cout << "token-end-index:   " << p->token_end_index << std::endl;
     std::cout << "batch-begin-index: " << p->batch_begin_index << std::endl;
     std::cout << "batch-end-index:   " << p->batch_end_index << std::endl;
-    std::cout << "data-key:          " << p->data_key << std::endl << std::endl;
   }
 }
 
@@ -162,11 +159,11 @@ Normalizers FindNt(const PhiMatrix& n_wt, const std::pair<int, int> begin_end_in
 
 // protocol:
 // 1) wait for START_NORMALIZATION flag
-// 2) after reaching it compute n_t on tokens from executer range
+// 2) after reaching it compute n_t on tokens from executor range
 // 3) put results into data slot and set cmd slot to FINISH_NORMALIZATION
 // 4) wait for new START_NORMALIZATION flag
 // 5) read total n_t from data slot
-// 6) proceed final normalization on tokens from executer range
+// 6) proceed final normalization on tokens from executor range
 // 7) set FINISH_NORMALIZATION flag and return
 bool NormalizeNwt(std::shared_ptr<PhiMatrix> p_wt,
                   const PhiMatrix& n_wt,
@@ -253,13 +250,16 @@ int main(int argc, char* argv[]) {
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
+  const std::string command_key = generate_command_key(params.executor_id);
+  const std::string data_key = generate_data_key(params.executor_id);
+
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
   try {
-    if (!CheckNonTerminatedAndUpdate(redis_client, params.command_key, FINISH_GLOBAL_START)) {
+    if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START)) {
       throw std::runtime_error("Step 0, got termination command");
     };
 
-    if (!WaitForFlag(redis_client, params.command_key, START_INITIALIZATION)) {
+    if (!WaitForFlag(redis_client, command_key, START_INITIALIZATION)) {
       throw std::runtime_error("Step 1 start, got termination command");
     };
 
@@ -309,14 +309,14 @@ int main(int argc, char* argv[]) {
       ++counter;
     }
 
-    redis_client.set_value(params.data_key, std::to_string(n));
+    redis_client.set_value(data_key, std::to_string(n));
 
-    if (!CheckNonTerminatedAndUpdate(redis_client, params.command_key, FINISH_INITIALIZATION)) {
+    if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_INITIALIZATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
     }
 
     if (!continue_fitting) {
-      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, params.command_key, params.data_key)) {
+      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 2, got termination status");
       }
     }
@@ -324,7 +324,7 @@ int main(int argc, char* argv[]) {
     Blas* blas = Blas::builtin();
     while (true) {
       // false here and only here means valid termination
-      if (!WaitForFlag(redis_client, params.command_key, START_ITERATION)) {
+      if (!WaitForFlag(redis_client, command_key, START_ITERATION)) {
         break;
       };
 
@@ -339,28 +339,28 @@ int main(int argc, char* argv[]) {
         ++counter;
       }
 
-      redis_client.set_value(params.data_key, std::to_string(perplexity_value));
+      redis_client.set_value(data_key, std::to_string(perplexity_value));
 
-      if (!CheckNonTerminatedAndUpdate(redis_client, params.command_key, FINISH_ITERATION)) {
+      if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_ITERATION)) {
         throw std::runtime_error("Step 3 start, got termination command");
       }
 
-      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, params.command_key, params.data_key)) {
+      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
     }
 
     // normal termination
-    redis_client.set_value(params.command_key, FINISH_TERMINATION);
+    redis_client.set_value(command_key, FINISH_TERMINATION);
 
   } catch (const std::exception& error) {
-    redis_client.set_value(params.command_key, FINISH_TERMINATION);
-    throw std::runtime_error(params.data_key + " " + error.what());
+    redis_client.set_value(command_key, FINISH_TERMINATION);
+    throw std::runtime_error(data_key + " " + error.what());
   } catch (...) {
-    redis_client.set_value(params.command_key, FINISH_TERMINATION);
+    redis_client.set_value(command_key, FINISH_TERMINATION);
     throw;
   }
 
-  std::cout << "Executor with cmd key '" << params.command_key << "' has finished!" << std::endl;
+  std::cout << "Executor with cmd key '" << command_key << "' has finished!" << std::endl;
   return 0;
 }
