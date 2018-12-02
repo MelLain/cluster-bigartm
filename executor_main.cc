@@ -260,8 +260,16 @@ int main(int argc, char* argv[]) {
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);
 
+  std::cout << "Processor " << command_key << ": has started" << std::endl;
+
+  std::cout << "Processor " << command_key << ": start connecting redis at "
+            << params.redis_ip << ":" << params.redis_port << std::endl;
+
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
+  std::cout << "Processor " << command_key << ": finish conneting to redis" << std::endl;
+
   try {
+    std::cout << "Processor " << command_key << ": start connecting to master" << std::endl;
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START, true)) {
       throw std::runtime_error("Step 0, got termination command");
     };
@@ -269,12 +277,14 @@ int main(int argc, char* argv[]) {
     if (!WaitForFlag(redis_client, command_key, START_INITIALIZATION)) {
       throw std::runtime_error("Step 1 start, got termination command");
     };
+    std::cout << "Processor " << command_key << ": finish connecting to master" << std::endl;
 
     std::vector<std::string> topics;
     for (int i = 0; i < params.num_topics; ++i) {
       topics.push_back("topic_" + std::to_string(i));
     }
 
+    std::cout << "Processor " << command_key << ": start creating and initialization of matrices" << std::endl;
     auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
     auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
 
@@ -317,19 +327,23 @@ int main(int argc, char* argv[]) {
     }
 
     redis_client.set_value(data_key, std::to_string(n));
+    std::cout << "Processor " << command_key << ": finish initialization of matrices" << std::endl;
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_INITIALIZATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
     }
 
     if (!continue_fitting) {
+      std::cout << "Processor " << command_key << ": start normalization" << std::endl;
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 2, got termination status");
       }
+      std::cout << "Processor " << command_key << ": finish normalization" << std::endl;
     }
 
     Blas* blas = Blas::builtin();
     while (true) {
+      std::cout << "Processor " << command_key << ": start new iteration" << std::endl;
       // false here and only here means valid termination
       if (!WaitForFlag(redis_client, command_key, START_ITERATION)) {
         break;
@@ -337,6 +351,7 @@ int main(int argc, char* argv[]) {
 
       float perplexity_value = 0.0f;
       counter = 0;
+      std::cout << "Processor " << command_key << ": start processing of E-step" << std::endl;
       for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
         if (counter >= params.batch_begin_index && counter < params.batch_end_index) {
           artm::Batch batch;
@@ -351,10 +366,15 @@ int main(int argc, char* argv[]) {
       if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_ITERATION)) {
         throw std::runtime_error("Step 3 start, got termination command");
       }
+      std::cout << "Processor " << command_key << ": finish processing of E-step" << std::endl;
 
+
+      std::cout << "Processor " << command_key << ": start processing of M-step" << std::endl;
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
+
+      std::cout << "Processor " << command_key << ": finish iteration" << std::endl;
     }
 
     // normal termination
