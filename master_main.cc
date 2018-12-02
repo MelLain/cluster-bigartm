@@ -255,36 +255,50 @@ void PrintTopTokens(RedisClient& redis_client,
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
+  std::clock_t time_start = std::clock();
+  std::stringstream ss;
+
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
-  std::cout << "Master: start connecting redis at " << params.redis_ip << ":" << params.redis_port << std::endl;
+  ss << "Master: start connecting redis at " << params.redis_ip << ":" << params.redis_port << std::endl;
+  log(ss.str(), time_start); ss.str("");
+
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
-  std::cout << "Master: finish conneting to redis" << std::endl;
+
+  ss << "Master: finish conneting to redis" << std::endl;
+  log(ss.str(), time_start); ss.str("");
 
   std::vector<std::string> executor_command_keys;
   std::vector<std::string> executor_data_keys;
 
-  std::cout << "Master: start creating ids" << std::endl;
+  ss << "Master: start creating ids" << std::endl;
+  log(ss.str(), time_start); ss.str("");
+
   for (const std::string& id : GetExecutorIds(params.executor_ids_path)) {
     executor_command_keys.push_back(generate_command_key(id));
     executor_data_keys.push_back(generate_data_key(id));
   }
-  std::cout << "Master: finish creating ids" << std::endl;
+
+  ss << "Master: finish creating ids" << std::endl;
+  log(ss.str(), time_start); ss.str("");
 
   try {
     // we give 1.0 sec to all executors to start, if even one of them
     // didn't response, it means, that it had failed to start
-    std::cout << "Master: start connecting to processors" << std::endl;
+    ss << "Master: start connecting to processors" << std::endl;
+    log(ss.str(), time_start); ss.str("");
 
     bool ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
                                         START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
     if (!ok) { throw std::runtime_error("Master: step 0, got termination status"); }
 
-    std::cout << "Master: finish connecting to processors" << std::endl;
+    ss << "Master: finish connecting to processors" << std::endl;
+    log(ss.str(), time_start); ss.str("");
 
+    ss << "Master: start initialization" << std::endl;
+    log(ss.str(), time_start); ss.str("");
 
-    std::cout << "Master: start initialization" << std::endl;
     ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_INITIALIZATION);
     if (!ok) { throw std::runtime_error("Master: step 1 start, got termination status"); }
 
@@ -292,17 +306,18 @@ int main(int argc, char* argv[]) {
                                    START_INITIALIZATION, FINISH_INITIALIZATION);
     if (!ok) { throw std::runtime_error("Master: step 1 finish, got termination status"); }
 
-    std::cout << "Master: finish initialization" << std::endl;
-
+    ss << "Master: finish initialization" << std::endl;
+    log(ss.str(), time_start); ss.str("");
 
     double n = 0.0;
     for (const auto& key : executor_data_keys) {
       n += std::stod(redis_client.get_value(key));
     }
 
-    std::cout << std::endl
-              << "Master: all executors have started! Total number of token slots in collection: "
-              << n << std::endl;
+    ss << std::endl
+       << "Master: all executors have started! Total number of token slots in collection: "
+       << n << std::endl;
+    log(ss.str(), time_start); ss.str("");
 
     if (!params.continue_fitting) {
       if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
@@ -312,8 +327,9 @@ int main(int argc, char* argv[]) {
 
     // EM-iterations
     for (int iteration = 0; iteration < params.num_outer_iters; ++iteration) {
+      ss << "Master: start iteration " << iteration << std::endl;
+      log(ss.str(), time_start); ss.str("");
 
-      std::cout << "Master: start iteration " << iteration << std::endl;
       ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_ITERATION);
       if (!ok) { throw std::runtime_error("Step 3 start, got termination status"); }
 
@@ -321,19 +337,20 @@ int main(int argc, char* argv[]) {
                                      START_ITERATION, FINISH_ITERATION);
       if (!ok) { throw std::runtime_error("Step 3 intermediate, got termination status"); }
 
-
       double perplexity_value = 0.0;
       for (const auto& key : executor_data_keys) {
         perplexity_value += std::stod(redis_client.get_value(key));
       }
 
-      std::cout << "Master: finish e-step, start m-step" << std::endl;
+      ss << "Master: finish e-step, start m-step" << std::endl;
+      log(ss.str(), time_start); ss.str("");
 
       if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
 
-      std::cout << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
+      ss << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
+      log(ss.str(), time_start); ss.str("");
     }
 
     // finalization (correct in any way)
@@ -353,6 +370,7 @@ int main(int argc, char* argv[]) {
     PrintTopTokens(redis_client, params.vocab_path, params.num_topics);
   }
 
-  std::cout << "Model fitting is finished!" << std::endl;
+  ss << "Model fitting is finished!" << std::endl;
+  log(ss.str(), time_start); ss.str("");
   return 0;
 }
