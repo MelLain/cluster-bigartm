@@ -263,19 +263,19 @@ int main(int argc, char* argv[]) {
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);
 
-  ss << "Processor " << command_key << ": has started" << std::endl;
+  ss << "Processor " << command_key << ": has started";
   log(ss.str(), time_start); ss.str("");
 
   ss << "Processor " << command_key << ": start connecting redis at "
-            << params.redis_ip << ":" << params.redis_port << std::endl;
+            << params.redis_ip << ":" << params.redis_port;
   log(ss.str(), time_start); ss.str("");
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
-  ss << "Processor " << command_key << ": finish conneting to redis" << std::endl;
+  ss << "Processor " << command_key << ": finish conneting to redis";
   log(ss.str(), time_start); ss.str("");
 
   try {
-    ss << "Processor " << command_key << ": start connecting to master" << std::endl;
+    ss << "Processor " << command_key << ": start connecting to master";
     log(ss.str(), time_start); ss.str("");
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START, true)) {
@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
     if (!WaitForFlag(redis_client, command_key, START_INITIALIZATION)) {
       throw std::runtime_error("Step 1 start, got termination command");
     };
-    ss << "Processor " << command_key << ": finish connecting to master" << std::endl;
+    ss << "Processor " << command_key << ": finish connecting to master";
     log(ss.str(), time_start); ss.str("");
 
     std::vector<std::string> topics;
@@ -293,7 +293,7 @@ int main(int argc, char* argv[]) {
       topics.push_back("topic_" + std::to_string(i));
     }
 
-    ss << "Processor " << command_key << ": start creating and initialization of matrices" << std::endl;
+    ss << "Processor " << command_key << ": start creating and initialization of matrices";
     log(ss.str(), time_start); ss.str("");
 
     auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
@@ -338,7 +338,7 @@ int main(int argc, char* argv[]) {
     }
 
     redis_client.set_value(data_key, std::to_string(n));
-    ss << "Processor " << command_key << ": finish initialization of matrices" << std::endl;
+    ss << "Processor " << command_key << ": finish initialization of matrices";
     log(ss.str(), time_start); ss.str("");
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_INITIALIZATION)) {
@@ -346,20 +346,20 @@ int main(int argc, char* argv[]) {
     }
 
     if (!continue_fitting) {
-      ss << "Processor " << command_key << ": start normalization" << std::endl;
+      ss << "Processor " << command_key << ": start normalization";
       log(ss.str(), time_start); ss.str("");
 
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 2, got termination status");
       }
 
-      ss << "Processor " << command_key << ": finish normalization" << std::endl;
+      ss << "Processor " << command_key << ": finish normalization";
       log(ss.str(), time_start); ss.str("");
     }
 
     Blas* blas = Blas::builtin();
     while (true) {
-      ss << "Processor " << command_key << ": start new iteration" << std::endl;
+      ss << "Processor " << command_key << ": start new iteration";
       log(ss.str(), time_start); ss.str("");
 
       // false here and only here means valid termination
@@ -369,7 +369,7 @@ int main(int argc, char* argv[]) {
 
       float perplexity_value = 0.0f;
       counter = 0;
-      ss << "Processor " << command_key << ": start processing of E-step" << std::endl;
+      ss << "Processor " << command_key << ": start processing of E-step";
       log(ss.str(), time_start); ss.str("");
 
       for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
@@ -387,14 +387,14 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Step 3 start, got termination command");
       }
 
-      ss << "Processor " << command_key << ": finish processing of E-step, start M-step" << std::endl;
+      ss << "Processor " << command_key << ": finish processing of E-step, start M-step";
       log(ss.str(), time_start); ss.str("");
 
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
 
-      ss << "Processor " << command_key << ": finish iteration" << std::endl;
+      ss << "Processor " << command_key << ": finish iteration";
       log(ss.str(), time_start); ss.str("");
     }
 
@@ -409,7 +409,7 @@ int main(int argc, char* argv[]) {
     throw;
   }
 
-  ss << "Executor with cmd key '" << command_key << "' has finished!" << std::endl;
+  ss << "Executor with cmd key '" << command_key << "' has finished!";
   log(ss.str(), time_start); ss.str("");
   return 0;
 }

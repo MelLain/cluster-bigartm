@@ -1,6 +1,7 @@
 import subprocess
 import os
 import argparse
+import math
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--vocab')
@@ -15,7 +16,7 @@ parser.add_argument('-c', '--continue-fitting')
 parser.add_argument('-o', '--output-path')
 
 def computeIndices(num_executors, size):
-	step = int(size / num_executors)
+	step = math.ceil(size / num_executors)
 	result = []
 	for i in range(num_executors):
 		result.append((step * i, min(step * (i + 1), size)))
