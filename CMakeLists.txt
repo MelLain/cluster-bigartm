@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0.2)
 
 project(cluster-bigartm)
 
@@ -12,6 +12,8 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 
 find_package(Boost REQUIRED) 
 include_directories(${Boost_INCLUDE_DIRS}) 
+
+find_package(glog 0.3.5 REQUIRED)
 
 set(CMAKE_CXX_COMPILER "g++")
 
@@ -46,12 +48,14 @@ target_link_libraries(
   cluster_bigartm_lib
   ${Boost_LIBRARIES}
   ${PROTOBUF_LIBRARY}
+  glog::glog
   -lhiredis
 )
 
 target_link_libraries(
   master_main
   cluster_bigartm_lib
+  glog::glog
   ${Boost_LIBRARIES}
   -lhiredis
 )

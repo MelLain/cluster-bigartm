@@ -13,6 +13,8 @@
 #include <boost/range/iterator_range.hpp>
 #include <boost/program_options.hpp>
 
+#include "glog/logging.h"
+
 #include "messages.pb.h"
 
 #include "blas.h"
@@ -97,7 +99,7 @@ bool CheckNonTerminatedAndUpdate(
     const std::string& flag,
     bool force = false) {
   if (signal_flag) {
-    std::cout << "SIGINT has been caught, start terminating" << std::endl;
+    LOG(ERROR) << "SIGINT has been caught, start terminating" << std::endl;
     return false;
   }
 
@@ -116,7 +118,7 @@ bool CheckNonTerminatedAndUpdate(
 bool WaitForFlag(const RedisClient& redis_client, const std::string& key, const std::string& flag) {
   while (true) {
     if (signal_flag) {
-      std::cout << "SIGINT has been caught, start terminating" << std::endl;
+      LOG(ERROR) << "SIGINT has been caught, start terminating" << std::endl;
       return false;
     }
 
@@ -254,29 +256,25 @@ void ProcessEStep(const artm::Batch& batch,
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
-  std::clock_t time_start = std::clock();
-  std::stringstream ss;
-
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
 
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);
 
-  ss << "Processor " << command_key << ": has started";
-  log(ss.str(), time_start); ss.str("");
 
-  ss << "Processor " << command_key << ": start connecting redis at "
+  google::InitGoogleLogging((std::string("cluster-bigartm-") + command_key).c_str());
+
+  LOG(INFO) << "Processor " << command_key << ": has started";
+
+  LOG(INFO) << "Processor " << command_key << ": start connecting redis at "
             << params.redis_ip << ":" << params.redis_port;
-  log(ss.str(), time_start); ss.str("");
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
-  ss << "Processor " << command_key << ": finish conneting to redis";
-  log(ss.str(), time_start); ss.str("");
+  LOG(INFO) << "Processor " << command_key << ": finish conneting to redis";
 
   try {
-    ss << "Processor " << command_key << ": start connecting to master";
-    log(ss.str(), time_start); ss.str("");
+    LOG(INFO) << "Processor " << command_key << ": start connecting to master";
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_GLOBAL_START, true)) {
       throw std::runtime_error("Step 0, got termination command");
@@ -285,16 +283,15 @@ int main(int argc, char* argv[]) {
     if (!WaitForFlag(redis_client, command_key, START_INITIALIZATION)) {
       throw std::runtime_error("Step 1 start, got termination command");
     };
-    ss << "Processor " << command_key << ": finish connecting to master";
-    log(ss.str(), time_start); ss.str("");
+
+    LOG(INFO) << "Processor " << command_key << ": finish connecting to master";
 
     std::vector<std::string> topics;
     for (int i = 0; i < params.num_topics; ++i) {
       topics.push_back("topic_" + std::to_string(i));
     }
 
-    ss << "Processor " << command_key << ": start creating and initialization of matrices";
-    log(ss.str(), time_start); ss.str("");
+    LOG(INFO) << "Processor " << command_key << ": start creating and initialization of matrices";
 
     auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
     auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
@@ -338,29 +335,25 @@ int main(int argc, char* argv[]) {
     }
 
     redis_client.set_value(data_key, std::to_string(n));
-    ss << "Processor " << command_key << ": finish initialization of matrices";
-    log(ss.str(), time_start); ss.str("");
+    LOG(INFO) << "Processor " << command_key << ": finish initialization of matrices";
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_INITIALIZATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
     }
 
     if (!continue_fitting) {
-      ss << "Processor " << command_key << ": start normalization";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": start normalization";
 
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 2, got termination status");
       }
 
-      ss << "Processor " << command_key << ": finish normalization";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": finish normalization";
     }
 
     Blas* blas = Blas::builtin();
     while (true) {
-      ss << "Processor " << command_key << ": start new iteration";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": start new iteration";
 
       // false here and only here means valid termination
       if (!WaitForFlag(redis_client, command_key, START_ITERATION)) {
@@ -369,8 +362,7 @@ int main(int argc, char* argv[]) {
 
       float perplexity_value = 0.0f;
       counter = 0;
-      ss << "Processor " << command_key << ": start processing of E-step";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": start processing of E-step";
 
       for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
         if (counter >= params.batch_begin_index && counter < params.batch_end_index) {
@@ -387,15 +379,13 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Step 3 start, got termination command");
       }
 
-      ss << "Processor " << command_key << ": finish processing of E-step, start M-step";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": finish processing of E-step, start M-step";
 
       if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
 
-      ss << "Processor " << command_key << ": finish iteration";
-      log(ss.str(), time_start); ss.str("");
+      LOG(INFO) << "Processor " << command_key << ": finish iteration";
     }
 
     // normal termination
@@ -409,7 +399,7 @@ int main(int argc, char* argv[]) {
     throw;
   }
 
-  ss << "Executor with cmd key '" << command_key << "' has finished!";
-  log(ss.str(), time_start); ss.str("");
+  LOG(INFO) << "Executor with cmd key '" << command_key << "' has finished!";
+
   return 0;
 }
