@@ -44,6 +44,11 @@ def main():
 	token_indices = computeIndices(num_executors * len(redis_addresses), num_tokens)
 	batch_indices = computeIndices(num_executors * len(redis_addresses), num_batches)
 
+	assert token_indices[0][0] == 0
+	assert token_indices[-1][-1] == num_tokens
+	assert batch_indices[0][0] == 0
+	assert batch_indices[-1][-1] == num_batches
+
 	cmd_str = './executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} '.format(
     	args['num_topics'],
     	args['num_inner_iter'],
@@ -53,9 +58,8 @@ def main():
 
 	executor_id = 0
 	for addr in redis_addresses:
-		additional_args = '--redis-ip {} --redis-port {} '.format(addr[0], addr[1])
-
 		for _ in range(num_executors):
+			additional_args = '--redis-ip {} --redis-port {} '.format(addr[0], addr[1])
 			additional_args += '--executor-id {} --token-begin-index {} --token-end-index {} --batch-begin-index {} --batch-end-index {}'.format(
 				executor_id,
 				token_indices[executor_id][0],
@@ -64,7 +68,7 @@ def main():
 				batch_indices[executor_id][1])
 
 			executor_id += 1
-		os.popen('{} {} &'.format(cmd_str, additional_args))
+			os.popen('{} {} &'.format(cmd_str, additional_args))
 
 	with open(args['output_path'], 'w') as fout:
 		for i in range(executor_id):

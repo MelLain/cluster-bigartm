@@ -53,6 +53,66 @@ struct Parameters {
   int debug_print;
 };
 
+void LogParams(const Parameters& params) {
+    LOG(INFO) << "num-topics: "        << params.num_topics << "; "
+              << "num-inner-iter: "    << params.num_inner_iters << "; "
+              << "batches-dir-path: "  << params.batches_dir_path << "; "
+              << "vocab-path: "        << params.vocab_path << "; "
+              << "redis-ip: "          << params.redis_ip << "; "
+              << "redis-port: "        << params.redis_port << "; "
+              << "continue-fitting: "  << params.continue_fitting << "; "
+              << "token-begin-index: " << params.token_begin_index << "; "
+              << "token-end-index: "   << params.token_end_index << "; "
+              << "batch-begin-index: " << params.batch_begin_index << "; "
+              << "batch-end-index: "   << params.batch_end_index;
+}
+
+void CheckParams(const Parameters& params) {
+  if (params.num_topics <= 0) {
+    throw std::runtime_error("num_topics should be a positive integer");
+  }
+
+  if (params.num_inner_iters <= 0) {
+    throw std::runtime_error("num_inner_iters should be a positive integer");
+  }
+
+  if (params.batches_dir_path == "") {
+    throw std::runtime_error("batches_dir_path should be non-empty");
+  }
+
+  if (params.vocab_path == "") {
+    throw std::runtime_error("vocab_path should be non-empty");
+  }
+
+  if (params.redis_ip == "") {
+    throw std::runtime_error("redis_ip should be non-empty");
+  }
+
+  if (params.redis_port == "") {
+    throw std::runtime_error("redis_port should be non-empty");
+  }
+
+  if (params.continue_fitting != 0 && params.continue_fitting != 1) {
+    throw std::runtime_error("continue_fitting should be equal to 0 or 1");
+  }
+
+  if (params.redis_port == "") {
+    throw std::runtime_error("redis_port should be non-empty");
+  }
+
+  if (params.token_begin_index < 0 || params.token_end_index < 0
+      || params.token_end_index < params.token_begin_index)
+  {
+    throw std::runtime_error("token_begin_index should be > 0 and <= token_end_index");
+  }
+
+  if (params.batch_begin_index < 0 || params.batch_end_index < 0
+      || params.batch_end_index < params.batch_begin_index)
+  {
+    throw std::runtime_error("batch_begin_index should be > 0 and <= batch_end_index");
+  }
+}
+
 void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   po::options_description all_options("Options");
   all_options.add_options()
@@ -138,6 +198,8 @@ bool WaitForFlag(const RedisClient& redis_client, const std::string& key, const 
 
 
 Normalizers FindNt(const PhiMatrix& n_wt, const std::pair<int, int> begin_end_indices) {
+  LOG(INFO) << "FindNt: begin_index = " << begin_end_indices.first
+                    << ", end_index = " << begin_end_indices.second;
   Normalizers retval;
   std::vector<float> helper = std::vector<float>(n_wt.topic_size(), 0.0f);
   for (int token_id = 0; token_id < n_wt.token_size(); ++token_id) {
@@ -183,6 +245,9 @@ bool NormalizeNwt(std::shared_ptr<PhiMatrix> p_wt,
   if(!WaitForFlag(redis_client, command_key, START_NORMALIZATION)) {
     return false;
   }
+
+  LOG(INFO) << "NormalizeNwt: begin_index = " << begin_end_indices.first
+                          << ", end_index = " << begin_end_indices.second;
 
   const int num_topics = n_wt.topic_size();
   const int num_tokens = n_wt.token_size();
@@ -262,8 +327,9 @@ int main(int argc, char* argv[]) {
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);
 
-
   google::InitGoogleLogging((std::string("cluster-bigartm-") + command_key).c_str());
+  LogParams(params);
+  CheckParams(params);
 
   LOG(INFO) << "Processor " << command_key << ": has started";
 
@@ -303,6 +369,7 @@ int main(int argc, char* argv[]) {
     int counter = 0;
     auto zero_vector = std::vector<float>(params.num_topics, 0.0f);
 
+    LOG(INFO) << "Gather dictionary and create matrices";
     std::ifstream fin;
     std::string line;
     fin.open(params.vocab_path);
@@ -318,6 +385,11 @@ int main(int argc, char* argv[]) {
       ++counter;
     }
     fin.close();
+
+    LOG(INFO) << "Number of tokens: " << n_wt->token_size() << "; redis matrices had been reset: " << !continue_fitting;
+
+    LOG(INFO) << "Gather total number of token slots in batches from "
+              << params.batch_begin_index << " to " << params.batch_end_index;
 
     double n = 0.0f;
     counter = 0;
@@ -335,7 +407,8 @@ int main(int argc, char* argv[]) {
     }
 
     redis_client.set_value(data_key, std::to_string(n));
-    LOG(INFO) << "Processor " << command_key << ": finish initialization of matrices";
+    LOG(INFO) << "Processor " << command_key << ": finish initialization of matrices, total number of slots: " << n
+              << " from " << counter << " batches";
 
     if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_INITIALIZATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
@@ -367,11 +440,18 @@ int main(int argc, char* argv[]) {
       for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
         if (counter >= params.batch_begin_index && counter < params.batch_end_index) {
           artm::Batch batch;
-          Helpers::LoadBatch(entry.path().string(), &batch);
+          const std::string batch_name = entry.path().string();
+          LOG(INFO) << "Start processing batch " << batch_name;
+
+          Helpers::LoadBatch(batch_name, &batch);
           ProcessEStep(batch, *p_wt, n_wt, params.num_inner_iters, blas, &perplexity_value);
+
+          LOG(INFO) << "Finish processing batch " << batch_name;
         }
         ++counter;
       }
+
+      LOG(INFO) << "Local pre-perplexity value: " << perplexity_value;
 
       redis_client.set_value(data_key, std::to_string(perplexity_value));
 

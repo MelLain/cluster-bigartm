@@ -44,6 +44,61 @@ struct Parameters {
   int debug_print;
 };
 
+void LogParams(const Parameters& params) {
+  LOG(INFO) << "num-topics: "        << params.num_topics << "; "
+            << "num-outer-iter: "    << params.num_outer_iters << "; "
+            << "executor-ids-path: " << params.executor_ids_path << "; "
+            << "batches-dir-path: "  << params.batches_dir_path << "; "
+            << "vocab-path: "        << params.vocab_path << "; "
+            << "redis-ip: "          << params.redis_ip << "; "
+            << "redis-port: "        << params.redis_port << "; "
+            << "show-top-tokens: "   << params.show_top_tokens << "; "
+            << "continue-fitting: "  << params.continue_fitting;
+}
+
+void CheckParams(const Parameters& params) {
+  if (params.num_topics <= 0) {
+    throw std::runtime_error("num_topics should be a positive integer");
+  }
+
+  if (params.num_outer_iters <= 0) {
+    throw std::runtime_error("num_outer_iters should be a positive integer");
+  }
+
+  if (params.num_topics <= 0) {
+    throw std::runtime_error("num_topics should be a positive integer");
+  }
+
+
+  if (params.batches_dir_path == "") {
+    throw std::runtime_error("batches_dir_path should be non-empty");
+  }
+
+  if (params.vocab_path == "") {
+    throw std::runtime_error("vocab_path should be non-empty");
+  }
+
+  if (params.executor_ids_path == "") {
+    throw std::runtime_error("executor_ids_path should be non-empty");
+  }
+
+  if (params.redis_ip == "") {
+    throw std::runtime_error("redis_ip should be non-empty");
+  }
+
+  if (params.redis_port == "") {
+    throw std::runtime_error("redis_port should be non-empty");
+  }
+
+  if (params.continue_fitting != 0 && params.continue_fitting != 1) {
+    throw std::runtime_error("continue_fitting should be equal to 0 or 1");
+  }
+
+  if (params.show_top_tokens != 0 && params.show_top_tokens != 1) {
+    throw std::runtime_error("show_top_tokens should be equal to 0 or 1");
+  }
+}
+
 void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   po::options_description all_options("Options");
   all_options.add_options()
@@ -251,8 +306,8 @@ void PrintTopTokens(RedisClient& redis_client,
 }
 
 
-// In case of fault of master without exceptions all sub-processes
-// (executors) can be killed on sinngle node via command:
+// In case of fault of master without exceptions and SIGINT signal all sub-processes
+// (executors) can be killed within a single node via command:
 // ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs kill -9
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
@@ -261,6 +316,8 @@ int main(int argc, char* argv[]) {
 
   Parameters params;
   ParseAndPrintArgs(argc, argv, &params);
+  LogParams(params);
+  CheckParams(params);
 
   LOG(INFO) << "Master: start connecting redis at " << params.redis_ip << ":" << params.redis_port;
 
@@ -308,6 +365,7 @@ int main(int argc, char* argv[]) {
     }
 
     LOG(INFO) << "Master: all executors have started! Total number of token slots in collection: " << n;
+    std::cout << "Master: all executors have started! Total number of token slots in collection: " << n << std::endl;
 
     if (!params.continue_fitting) {
       if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
@@ -338,6 +396,7 @@ int main(int argc, char* argv[]) {
       }
 
       LOG(INFO) << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value);
+      std::cout << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
     }
 
     // finalization (correct in any way)
