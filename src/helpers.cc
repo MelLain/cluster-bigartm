@@ -1,5 +1,8 @@
 #include <cstdlib>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #include <fstream>  // NOLINT
 #include <sstream>
 
@@ -14,6 +17,15 @@
 #include "helpers.h"
 #include "protobuf_helpers.h"
 #include "token.h"
+
+
+long Helpers::GetPeakMemoryKb() {
+  rusage info;
+  if (!getrusage(RUSAGE_SELF, &info)) {
+    return info.ru_maxrss;
+  }
+  return 0;
+}
 
 std::vector<float> Helpers::GenerateRandomVector(int size, size_t seed) {
   std::vector<float> retval;

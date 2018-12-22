@@ -57,5 +57,6 @@ target_link_libraries(
   cluster_bigartm_lib
   glog::glog
   ${Boost_LIBRARIES}
+  ${PROTOBUF_LIBRARY}
   -lhiredis
 )

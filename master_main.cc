@@ -21,6 +21,7 @@
 #include "redis_client.h"
 #include "redis_phi_matrix.h"
 #include "token.h"
+#include "helpers.h"
 
 namespace po = boost::program_options;
 
@@ -403,6 +404,7 @@ int main(int argc, char* argv[]) {
 
       LOG(INFO) << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value);
       std::cout << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
+      LOG(INFO) << "Iteration: " << iteration << ", maxrss: " << Helpers::GetPeakMemoryKb() << " KB";
     }
 
     // finalization (correct in any way)
@@ -423,5 +425,7 @@ int main(int argc, char* argv[]) {
   }
 
   LOG(INFO) << "Model fitting is finished!";
+  LOG(INFO) << "final maxrss= " << Helpers::GetPeakMemoryKb() << " KB";
+
   return 0;
 }

@@ -24,4 +24,5 @@ class Helpers {
   static std::vector<float> GenerateRandomVector(int size, const Token& token, int seed = -1);
 
   static void LoadBatch(const std::string& full_filename, artm::Batch* batch);
+  static long GetPeakMemoryKb();
 };

@@ -472,6 +472,7 @@ int main(int argc, char* argv[]) {
       }
 
       LOG(INFO) << "Processor " << command_key << ": finish iteration";
+      LOG(INFO) << "Processor " << command_key << ": maxrss= " << Helpers::GetPeakMemoryKb() << " KB";
     }
 
     // normal termination
@@ -486,6 +487,7 @@ int main(int argc, char* argv[]) {
   }
 
   LOG(INFO) << "Executor with cmd key '" << command_key << "' has finished!";
+  LOG(INFO) << "Executor with cmd key '" << command_key << "' final maxrss= " << Helpers::GetPeakMemoryKb() << " KB";
 
   return 0;
 }
