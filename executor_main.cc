@@ -327,7 +327,13 @@ int main(int argc, char* argv[]) {
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);
 
-  google::InitGoogleLogging((std::string("cluster-bigartm-") + command_key).c_str());
+  FLAGS_minloglevel = 0;
+  FLAGS_alsologtostderr = 1;
+  FLAGS_logbuflevel = -1;
+  FLAGS_stderrthreshold = 0;
+  FLAGS_log_dir = ".";
+  std::string log_file = std::string("cluster-bigartm-") + command_key;
+  google::InitGoogleLogging(log_file.c_str());
   LogParams(params);
   CheckParams(params);
 
