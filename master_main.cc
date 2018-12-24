@@ -314,9 +314,9 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
   FLAGS_minloglevel = 0;
-  FLAGS_alsologtostderr = 1;
-  FLAGS_logbuflevel = -1;
-  FLAGS_stderrthreshold = 0;
+  //FLAGS_alsologtostderr = 0;
+  //FLAGS_logbuflevel = -1;
+  //FLAGS_stderrthreshold = 0;
   FLAGS_log_dir = ".";
   std::string log_file = std::string("cluster-bigartm-master");
   google::InitGoogleLogging(log_file.c_str());  
@@ -330,7 +330,7 @@ int main(int argc, char* argv[]) {
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
 
-  LOG(INFO) << "Master: finish conneting to redis";
+  LOG(INFO) << "Master: finish connecting to redis";
 
   std::vector<std::string> executor_command_keys;
   std::vector<std::string> executor_data_keys;

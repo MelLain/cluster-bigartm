@@ -16,11 +16,13 @@ class RedisPhiMatrix : public PhiMatrix{
  public:
   RedisPhiMatrix(const ModelName& model_name,
   	             const std::vector<std::string>& topic_name,
-  	             RedisClient& redis_client)
+  	             RedisClient& redis_client,
+                 bool use_cache = false)
       : model_name_(model_name)
       , topic_name_(topic_name)
       , token_collection_()
-      , redis_client_(redis_client) { }
+      , redis_client_(redis_client)
+      , use_cache_() { }
 
   virtual int token_size() const;
 
@@ -53,7 +55,17 @@ class RedisPhiMatrix : public PhiMatrix{
   virtual int AddToken(const Token& token, bool flag);
   int AddToken(const Token& token, bool flag, const std::vector<float>& values);
 
-  virtual ~RedisPhiMatrix() { }
+  void ClearCache() {
+    cache_.clear();
+  }
+
+  virtual ~RedisPhiMatrix() {
+    ClearCache();
+  }
+
+  virtual bool use_cache() const {
+    return use_cache_;
+  }
 
   virtual std::shared_ptr<PhiMatrix> Duplicate() const {
     throw std::runtime_error("RedisPhiMatrix doesn't support duplication");
@@ -66,4 +78,6 @@ class RedisPhiMatrix : public PhiMatrix{
   std::vector<std::string> topic_name_;
   TokenCollection token_collection_;
   RedisClient& redis_client_;
+  bool use_cache_;
+  mutable std::unordered_map<int, std::vector<float>> cache_;
 };

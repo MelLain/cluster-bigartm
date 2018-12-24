@@ -21,6 +21,7 @@ class PhiMatrix {
   virtual const Token token(int index) const = 0;
   virtual bool has_token(const Token& token) const = 0;
   virtual int token_index(const Token& token) const = 0;
+  virtual bool use_cache() const = 0;
 
   virtual float get(int token_id, int topic_id) const = 0;
   virtual void get(int token_id, std::vector<float>* buffer) const = 0;
@@ -30,6 +31,7 @@ class PhiMatrix {
   virtual void increase(int token_id, const std::vector<float>& increment) = 0;  // must be thread-safe
 
   virtual void Clear() = 0;
+  virtual void ClearCache() = 0;
   virtual int AddToken(const Token& token, bool flag = true) = 0;
 
   virtual std::shared_ptr<PhiMatrix> Duplicate() const = 0;

@@ -11,6 +11,7 @@ parser.add_argument('-n', '--num-executors')
 parser.add_argument('-t', '--num-topics')
 parser.add_argument('-i', '--num-inner-iter')
 parser.add_argument('-c', '--continue-fitting')
+parser.add_argument('-p', '--cache-phi')
 
 parser.add_argument('-o', '--output-path')
 
@@ -49,12 +50,13 @@ def main():
 	assert batch_indices[0][0] == 0
 	assert batch_indices[-1][-1] == num_batches
 
-	cmd_str = './executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} '.format(
+	cmd_str = './executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} --cache-phi {}'.format(
     	args['num_topics'],
     	args['num_inner_iter'],
     	args['batches_path'],
     	args['vocab'],
-    	args['continue_fitting'])
+    	args['continue_fitting'],
+    	args['cache_phi'])
 
 	executor_id = 0
 	for addr in redis_addresses:

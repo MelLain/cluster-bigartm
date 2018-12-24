@@ -45,6 +45,7 @@ struct Parameters {
   std::string redis_ip;
   std::string redis_port;
   int continue_fitting;
+  int cache_phi;
   int token_begin_index;
   int token_end_index;
   int batch_begin_index;
@@ -61,6 +62,7 @@ void LogParams(const Parameters& params) {
               << "redis-ip: "          << params.redis_ip << "; "
               << "redis-port: "        << params.redis_port << "; "
               << "continue-fitting: "  << params.continue_fitting << "; "
+              << "cache phi: "         << params.cache_phi << "; "
               << "token-begin-index: " << params.token_begin_index << "; "
               << "token-end-index: "   << params.token_end_index << "; "
               << "batch-begin-index: " << params.batch_begin_index << "; "
@@ -96,6 +98,10 @@ void CheckParams(const Parameters& params) {
     throw std::runtime_error("continue_fitting should be equal to 0 or 1");
   }
 
+  if (params.cache_phi != 0 && params.cache_phi != 1) {
+    throw std::runtime_error("cache_phi should be equal to 0 or 1");
+  }
+
   if (params.redis_port == "") {
     throw std::runtime_error("redis_port should be non-empty");
   }
@@ -124,6 +130,7 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     ("redis-ip", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
     ("redis-port", po::value(&p->redis_port)->default_value(""), "port of redis instance")
     ("continue-fitting", po::value(&p->continue_fitting)->default_value(0), "1 - continue fitting redis model, 0 - restart")
+    ("cache-phi", po::value(&p->cache_phi)->default_value(0), "1 - cache phi matrix for current batch, 0 - always go to redis")
     ("token-begin-index", po::value(&p->token_begin_index)->default_value(0), "index of token to init/norm from")
     ("token-end-index", po::value(&p->token_end_index)->default_value(0), "index of token to init/norm to (excluding)")
     ("batch-begin-index", po::value(&p->batch_begin_index)->default_value(0), "index of batch to process from")
@@ -145,6 +152,7 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     std::cout << "redis-ip:          " << p->redis_ip << std::endl;
     std::cout << "redis-port:        " << p->redis_port << std::endl;
     std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
+    std::cout << "cache-phi:         " << p->cache_phi << std::endl;
     std::cout << "token-begin-index: " << p->token_begin_index << std::endl;
     std::cout << "token-end-index:   " << p->token_end_index << std::endl;
     std::cout << "batch-begin-index: " << p->batch_begin_index << std::endl;
@@ -328,10 +336,11 @@ int main(int argc, char* argv[]) {
   const std::string data_key = generate_data_key(params.executor_id);
 
   FLAGS_minloglevel = 0;
-  FLAGS_alsologtostderr = 1;
-  FLAGS_logbuflevel = -1;
-  FLAGS_stderrthreshold = 0;
+  //FLAGS_alsologtostderr = 0;
+  //FLAGS_logbuflevel = -1;
+  //FLAGS_stderrthreshold = 0;
   FLAGS_log_dir = ".";
+
   std::string log_file = std::string("cluster-bigartm-") + command_key;
   google::InitGoogleLogging(log_file.c_str());
   LogParams(params);
@@ -343,7 +352,7 @@ int main(int argc, char* argv[]) {
             << params.redis_ip << ":" << params.redis_port;
 
   RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
-  LOG(INFO) << "Processor " << command_key << ": finish conneting to redis";
+  LOG(INFO) << "Processor " << command_key << ": finish connecting to redis";
 
   try {
     LOG(INFO) << "Processor " << command_key << ": start connecting to master";
@@ -365,7 +374,8 @@ int main(int argc, char* argv[]) {
 
     LOG(INFO) << "Processor " << command_key << ": start creating and initialization of matrices";
 
-    auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
+    bool use_cache = (params.cache_phi == 1);
+    auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client, use_cache));
     auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, redis_client));
 
     bool continue_fitting = (params.continue_fitting == 1);
@@ -451,6 +461,7 @@ int main(int argc, char* argv[]) {
 
           Helpers::LoadBatch(batch_name, &batch);
           ProcessEStep(batch, *p_wt, n_wt, params.num_inner_iters, blas, &perplexity_value);
+          p_wt->ClearCache();
 
           LOG(INFO) << "Finish processing batch " << batch_name;
         }
