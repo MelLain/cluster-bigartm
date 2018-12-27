@@ -70,7 +70,7 @@ def main():
 				batch_indices[executor_id][1])
 
 			executor_id += 1
-			print('{} {} > executor_main_{}.log &'.format(cmd_str, additional_args, executor_id))
+			print('{} {} &'.format(cmd_str, additional_args))
 
 	with open(args['output_path'], 'w') as fout:
 		for i in range(executor_id):
