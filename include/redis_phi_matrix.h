@@ -24,50 +24,53 @@ class RedisPhiMatrix : public PhiMatrix{
       , redis_client_(redis_client)
       , use_cache_() { }
 
-  virtual int token_size() const;
+  int token_size() const;
 
-  virtual int topic_size() const { return topic_name_.size(); }
-  virtual std::vector<std::string> topic_name() const { return topic_name_; }
+  int topic_size() const { return topic_name_.size(); }
+  std::vector<std::string> topic_name() const { return topic_name_; }
 
   const std::vector<std::string>& topic_name_ref() const { return topic_name_; }
 
-  virtual const std::string& topic_name(int topic_id) const { return topic_name_[topic_id]; }
+  const std::string& topic_name(int topic_id) const { return topic_name_[topic_id]; }
 
-  virtual void set_topic_name(int topic_id, const std::string& topic_name) {
+  void set_topic_name(int topic_id, const std::string& topic_name) {
   	topic_name_[topic_id] = topic_name;
   }
 
-  virtual ModelName model_name() const { return model_name_; }
+  ModelName model_name() const { return model_name_; }
 
-  virtual const Token token(int index) const;
-  virtual bool has_token(const Token& token) const;
-  virtual int token_index(const Token& token) const;
+  const Token token(int index) const;
+  bool has_token(const Token& token) const;
+  int token_index(const Token& token) const;
 
-  virtual void set(int token_id, int topic_id, float value);
-  virtual void set(int token_id, const std::vector<float>& buffer);
+  void set(int token_id, int topic_id, float value);
+  void set(int token_id, const std::vector<float>& buffer);
 
-  virtual float get(int token_id, int topic_id) const;
-  virtual void get(int token_id, std::vector<float>* buffer) const;
-  virtual void increase(int token_id, int topic_id, float increment);
-  virtual void increase(int token_id, const std::vector<float>& increment);
+  float get(int token_id, int topic_id) const;
+  void get(int token_id, std::vector<float>* buffer) const;
 
-  virtual void Clear() { };
-  virtual int AddToken(const Token& token, bool flag);
+  void get_set(int token_id, std::vector<float>* buffer, const std::vector<float>& values);
+
+  void increase(int token_id, int topic_id, float increment);
+  void increase(int token_id, const std::vector<float>& increment);
+
+  void Clear() { };
+  int AddToken(const Token& token, bool flag);
   int AddToken(const Token& token, bool flag, const std::vector<float>& values);
 
   void ClearCache() {
     cache_.clear();
   }
 
-  virtual ~RedisPhiMatrix() {
+  ~RedisPhiMatrix() {
     ClearCache();
   }
 
-  virtual bool use_cache() const {
+  bool use_cache() const {
     return use_cache_;
   }
 
-  virtual std::shared_ptr<PhiMatrix> Duplicate() const {
+  std::shared_ptr<PhiMatrix> Duplicate() const {
     throw std::runtime_error("RedisPhiMatrix doesn't support duplication");
   };
 

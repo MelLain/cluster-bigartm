@@ -27,6 +27,7 @@ class PhiMatrix {
   virtual void get(int token_id, std::vector<float>* buffer) const = 0;
   virtual void set(int token_id, int topic_id, float value) = 0;
   virtual void set(int token_id, const std::vector<float>& buffer) = 0;
+  virtual void get_set(int token_id, std::vector<float>* buffer, const std::vector<float>& values) = 0;
   virtual void increase(int token_id, int topic_id, float increment) = 0;
   virtual void increase(int token_id, const std::vector<float>& increment) = 0;  // must be thread-safe
 

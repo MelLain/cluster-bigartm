@@ -41,6 +41,13 @@ void RedisPhiMatrix::get(int token_id, std::vector<float>* buffer) const {
   }
 }
 
+void RedisPhiMatrix::get_set(int token_id, std::vector<float>* buffer, const std::vector<float>& values) {
+  std::vector<float> temp = redis_client_.get_set_values(to_key(token_id), values);
+  for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
+    (*buffer)[topic_id] = temp[topic_id];
+  }
+}
+
 void RedisPhiMatrix::set(int token_id, int topic_id, float value) {
   throw std::runtime_error("Redis matrix does not support single set");
 }

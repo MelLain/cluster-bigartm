@@ -18,6 +18,19 @@ std::vector<float> RedisClient::get_values(const std::string& key, int values_si
   return retval;
 }
 
+std::vector<float> RedisClient::get_set_values(const std::string& key, const std::vector<float>& set_values) {
+  auto val_ptr = reinterpret_cast<const char*>(&(set_values[0]));
+  auto val_size = (size_t) (set_values.size() * sizeof(float));
+
+  reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "GETSET %s %b", key.c_str(), val_ptr, val_size);
+
+  auto values = reinterpret_cast<const float*>(reply_->str);
+  auto retval = std::vector<float>(values, values + set_values.size());
+
+  clean_reply();
+  return retval;
+}
+
 void RedisClient::set_value(const std::string& key, const std::string& value) const {
   reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(),
     "SET %s %b", key.c_str(), value.c_str(), value.size());

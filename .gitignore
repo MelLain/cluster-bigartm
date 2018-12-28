@@ -10,6 +10,9 @@ master_main
 messages.pb.h
 messages.pb.cc
 *~
+*INFO*
+*WARN*
+*ERROR*
 appendonly.aof
 dump.rdb
 redis-nodes.conf

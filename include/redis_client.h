@@ -32,6 +32,8 @@ class RedisClient {
   // https://stackoverflow.com/questions/44065808/returning-stdvector-with-stdmove
   std::vector<float> get_values(const std::string& key, int values_size) const;
 
+  std::vector<float> get_set_values(const std::string& key, const std::vector<float>& values);
+
   void set_value(const std::string& key, const std::string& value) const;
   std::string get_value(const std::string& key) const;
 

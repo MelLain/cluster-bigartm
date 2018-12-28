@@ -245,7 +245,7 @@ Normalizers FindNt(const PhiMatrix& n_wt, const std::pair<int, int> begin_end_in
 // 6) proceed final normalization on tokens from executor range
 // 7) set FINISH_NORMALIZATION flag and return
 bool NormalizeNwt(std::shared_ptr<PhiMatrix> p_wt,
-                  const PhiMatrix& n_wt,
+                  std::shared_ptr<PhiMatrix> n_wt,
                   const std::pair<int, int> begin_end_indices,
                   const RedisClient& redis_client,
                   const std::string& command_key,
@@ -257,12 +257,13 @@ bool NormalizeNwt(std::shared_ptr<PhiMatrix> p_wt,
   LOG(INFO) << "NormalizeNwt: begin_index = " << begin_end_indices.first
                           << ", end_index = " << begin_end_indices.second;
 
-  const int num_topics = n_wt.topic_size();
-  const int num_tokens = n_wt.token_size();
+  const int num_topics = n_wt->topic_size();
+  const int num_tokens = n_wt->token_size();
+  const std::vector<float> zeros(num_topics, 0.0f);
 
-  assert(p_wt->token_size() == n_wt.token_size() && p_wt->topic_size() == n_wt.topic_size());
+  assert(p_wt->token_size() == n_wt->token_size() && p_wt->topic_size() == n_wt->topic_size());
 
-  Normalizers n_t = FindNt(n_wt, begin_end_indices);
+  Normalizers n_t = FindNt(*n_wt, begin_end_indices);
   redis_client.set_hashmap(data_key, n_t);
 
   if (!CheckNonTerminatedAndUpdate(redis_client, command_key, FINISH_NORMALIZATION)) {
@@ -280,12 +281,14 @@ bool NormalizeNwt(std::shared_ptr<PhiMatrix> p_wt,
       continue;
     }
 
-    const Token& token = n_wt.token(token_id);
+    const Token& token = n_wt->token(token_id);
     assert(p_wt->token(token_id) == token);
     const std::vector<double>& nt = n_t[token.class_id];
-    std::vector<float> helper = std::vector<float>(n_wt.topic_size(), 0.0f);
-    std::vector<float> helper_n_wt = std::vector<float>(n_wt.topic_size(), 0.0f);
-    n_wt.get(token_id, &helper_n_wt);
+
+    std::vector<float> helper = std::vector<float>(num_topics, 0.0f);
+    std::vector<float> helper_n_wt = std::vector<float>(num_topics, 0.0f);
+
+    n_wt->get_set(token_id, &helper_n_wt, zeros);
     for (int topic_index = 0; topic_index < num_topics; ++topic_index) {
       float value = 0.0f;
       if (nt[topic_index] > 0) {
@@ -430,7 +433,7 @@ int main(int argc, char* argv[]) {
     if (!continue_fitting) {
       LOG(INFO) << "Processor " << command_key << ": start normalization";
 
-      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
+      if (!NormalizeNwt(p_wt, n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 2, got termination status");
       }
 
@@ -475,7 +478,7 @@ int main(int argc, char* argv[]) {
 
       LOG(INFO) << "Processor " << command_key << ": finish processing of E-step, start M-step";
 
-      if (!NormalizeNwt(p_wt, *n_wt, token_indices, redis_client, command_key, data_key)) {
+      if (!NormalizeNwt(p_wt, n_wt, token_indices, redis_client, command_key, data_key)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
 
