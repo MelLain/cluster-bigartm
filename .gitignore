@@ -7,6 +7,8 @@ cmake_install.cmake
 *.o
 executor_main
 master_main
+messages.pb.h
+messages.pb.cc
 *~
 appendonly.aof
 dump.rdb

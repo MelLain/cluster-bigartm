@@ -34,7 +34,6 @@ void signal_handler(int sig) {
 struct Parameters {
   int num_topics;
   int num_outer_iters;
-  int num_inner_iters;
   std::string executor_ids_path;
   std::string batches_dir_path;
   std::string vocab_path;
@@ -314,9 +313,6 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
   FLAGS_minloglevel = 0;
-  //FLAGS_alsologtostderr = 0;
-  //FLAGS_logbuflevel = -1;
-  //FLAGS_stderrthreshold = 0;
   FLAGS_log_dir = ".";
   std::string log_file = std::string("cluster-bigartm-master");
   google::InitGoogleLogging(log_file.c_str());  

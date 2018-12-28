@@ -6,6 +6,12 @@ include(FindProtobuf)
 find_package(Protobuf REQUIRED)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
+add_custom_command(
+  OUTPUT messages.pb.cc messages.pb.h
+  DEPENDS messages.proto
+  COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} messages.proto --cpp_out=./
+)
+
 set(Boost_USE_STATIC_LIBS ON) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
@@ -19,11 +25,12 @@ set(CMAKE_CXX_COMPILER "g++")
 
 include_directories(./include)
 include_directories(./3rdparty)
+include_directories(.)
 
 set(SOURCE_LIB
+  messages.pb.cc
   src/blas.cc
   src/helpers.cc
-  src/messages.pb.cc
   src/processor_helpers.cc
   src/redis_phi_matrix.cc
   src/token.cc
@@ -40,8 +47,8 @@ set(CMAKE_CXX_FLAGS
 
 add_library(cluster_bigartm_lib STATIC ${SOURCE_LIB})
 
-add_executable(executor_main executor_main.cc)
-add_executable(master_main master_main.cc)
+add_executable(executor_main src/executor_main.cc)
+add_executable(master_main src/master_main.cc)
 
 target_link_libraries(
   executor_main
