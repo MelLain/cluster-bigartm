@@ -12,7 +12,7 @@
 #include "token.h"
 #include "redis_client.h"
 
-class RedisPhiMatrix : public PhiMatrix{
+class RedisPhiMatrix : public PhiMatrix {
  public:
   RedisPhiMatrix(const ModelName& model_name,
   	             const std::vector<std::string>& topic_name,
@@ -22,7 +22,8 @@ class RedisPhiMatrix : public PhiMatrix{
       , topic_name_(topic_name)
       , token_collection_()
       , redis_client_(redis_client)
-      , use_cache_() { }
+      , use_cache_(use_cache)
+      , cache_() { }
 
   int token_size() const;
 
