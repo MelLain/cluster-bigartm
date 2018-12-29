@@ -119,7 +119,7 @@ void CheckParams(const Parameters& params) {
   }
 }
 
-void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
+bool ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   po::options_description all_options("Options");
   all_options.add_options()
     ("help", "Show help")
@@ -143,6 +143,12 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
   notify(vm);
 
+  bool show_help = (vm.count("help") > 0);
+  if (show_help) {
+    std::cerr << all_options;
+    return true;
+  }
+
   if (p->debug_print == 1) {
     std::cout << std::endl << "======= Executor info, id '" << p->executor_id << "' =======" << std::endl;
     std::cout << "num-topics:        " << p->num_topics << std::endl;
@@ -158,6 +164,8 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
     std::cout << "batch-begin-index: " << p->batch_begin_index << std::endl;
     std::cout << "batch-end-index:   " << p->batch_end_index << std::endl;
   }
+
+  return false;
 }
 
 
@@ -333,7 +341,10 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
   Parameters params;
-  ParseAndPrintArgs(argc, argv, &params);
+  bool is_help_call = ParseAndPrintArgs(argc, argv, &params);
+  if (is_help_call) {
+    return 0;
+  }
 
   const std::string command_key = generate_command_key(params.executor_id);
   const std::string data_key = generate_data_key(params.executor_id);

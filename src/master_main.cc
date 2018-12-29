@@ -99,7 +99,7 @@ void CheckParams(const Parameters& params) {
   }
 }
 
-void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
+bool ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   po::options_description all_options("Options");
   all_options.add_options()
     ("help", "Show help")
@@ -118,6 +118,12 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
   notify(vm);
 
+  bool show_help = (vm.count("help") > 0);
+  if (show_help) {
+    std::cerr << all_options;
+    return true;
+  }
+
   std::cout << "num-topics:        " << p->num_topics << std::endl;
   std::cout << "num-outer-iter:    " << p->num_outer_iters << std::endl;
   std::cout << "executor-ids-path: " << p->executor_ids_path << std::endl;
@@ -127,6 +133,8 @@ void ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
   std::cout << "redis-port:        " << p->redis_port << std::endl;
   std::cout << "show-top-tokens:   " << p->show_top_tokens << std::endl;
   std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
+
+  return false;
 }
 
 std::vector<std::string> GetExecutorIds(const std::string& executor_ids_path) {
@@ -312,14 +320,18 @@ void PrintTopTokens(RedisClient& redis_client,
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
+  Parameters params;
+  bool is_help_call = ParseAndPrintArgs(argc, argv, &params);
+  if (is_help_call) {
+    return 0;
+  }
+
   FLAGS_minloglevel = 0;
   FLAGS_log_dir = ".";
 
   std::string log_file = std::string("cluster-bigartm-master");
   google::InitGoogleLogging(log_file.c_str());  
 
-  Parameters params;
-  ParseAndPrintArgs(argc, argv, &params);
   LogParams(params);
   CheckParams(params);
 
