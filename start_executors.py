@@ -50,7 +50,7 @@ def main():
 	assert batch_indices[0][0] == 0
 	assert batch_indices[-1][-1] == num_batches
 
-	cmd_str = './executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} --cache-phi {}'.format(
+	cmd_str = '/usit/abel/u1/oleksanf/GitHub/MelLain/cluster-bigartm/build/executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} --cache-phi {}'.format(
     	args['num_topics'],
     	args['num_inner_iter'],
     	args['batches_path'],
@@ -70,7 +70,7 @@ def main():
 				batch_indices[executor_id][1])
 
 			executor_id += 1
-			os.popen('{} {} &'.format(cmd_str, additional_args))
+			print('{} {} &'.format(cmd_str, additional_args))
 
 	with open(args['output_path'], 'w') as fout:
 		for i in range(executor_id):

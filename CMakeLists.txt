@@ -2,22 +2,24 @@ cmake_minimum_required(VERSION 3.0.2)
 
 project(cluster-bigartm)
 
-include(FindProtobuf)
-find_package(Protobuf REQUIRED)
-include_directories(${PROTOBUF_INCLUDE_DIR})
+set(PROTOBUF_INCLUDE_DIR "/cluster/software/VERSIONS/protobuf-3.0.0/include")
+set(PROTOBUF_LIBRARY "/cluster/software/VERSIONS/protobuf-3.0.0/lib/libprotobuf.so")
 
-add_custom_command(
-  OUTPUT messages.pb.cc messages.pb.h
-  DEPENDS messages.proto
-  COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} messages.proto --cpp_out=./
-)
+message("-- PROTOBUF INCLUDE: ${PROTOBUF_INCLUDE_DIR}")
+message("-- PROOTBUF LIBRARY: ${PROTOBUF_LIBRARY}")
+
+include_directories(${PROTOBUF_INCLUDE_DIR})
+include_directories("/usit/abel/u1/oleksanf/include")           # hiredis
 
 set(Boost_USE_STATIC_LIBS ON) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
 
-find_package(Boost REQUIRED) 
+find_package(Boost COMPONENTS REQUIRED program_options filesystem system) 
 include_directories(${Boost_INCLUDE_DIRS}) 
+link_directories("/usit/abel/u1/oleksanf/lib")    # hiredis
+
+message("-- BOOST LIBRARY: ${Boost_LIBRARIES}")
 
 find_package(glog 0.3.5 REQUIRED)
 
@@ -28,7 +30,7 @@ include_directories(./3rdparty)
 include_directories(.)
 
 set(SOURCE_LIB
-  messages.pb.cc
+  artm/messages.pb.cc
   src/blas.cc
   src/helpers.cc
   src/processor_helpers.cc
@@ -40,10 +42,6 @@ set(SOURCE_LIB
 set(CMAKE_CXX_STANDARD 11)
 
 set(CXX_STANDARD_REQUIRED)
-
-set(CMAKE_CXX_FLAGS
-  "-lboost_filesystem -lboost_system -lboost_program_options"
-)
 
 add_library(cluster_bigartm_lib STATIC ${SOURCE_LIB})
 

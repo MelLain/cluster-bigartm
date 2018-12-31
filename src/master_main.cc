@@ -320,17 +320,19 @@ void PrintTopTokens(RedisClient& redis_client,
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
+  FLAGS_minloglevel = 0;
+  FLAGS_alsologtostderr = 1;
+  FLAGS_logbuflevel = -1;
+  FLAGS_stderrthreshold = 0;
+  FLAGS_log_dir = ".";
+  std::string log_file = std::string("cluster-bigartm-master");
+  google::InitGoogleLogging(log_file.c_str());  
+
   Parameters params;
   bool is_help_call = ParseAndPrintArgs(argc, argv, &params);
   if (is_help_call) {
     return 0;
   }
-
-  FLAGS_minloglevel = 0;
-  FLAGS_log_dir = ".";
-
-  std::string log_file = std::string("cluster-bigartm-master");
-  google::InitGoogleLogging(log_file.c_str());  
 
   LogParams(params);
   CheckParams(params);
