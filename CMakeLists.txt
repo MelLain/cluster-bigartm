@@ -30,7 +30,7 @@ include_directories(./3rdparty)
 include_directories(.)
 
 set(SOURCE_LIB
-  messages.pb.cc
+  artm/messages.pb.cc
   src/blas.cc
   src/helpers.cc
   src/processor_helpers.cc
