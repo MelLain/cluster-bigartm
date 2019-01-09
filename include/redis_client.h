@@ -12,9 +12,8 @@ using namespace RedisCluster;
 
 class RedisClient {
  public:
-  RedisClient(const std::string& ip, int port, int max_retries, int timeout)
-      : max_retries_(max_retries)
-      , timeout_(timeout)
+  RedisClient(const std::string& ip, int port, int timeout)
+      : timeout_(timeout)
       , reply_(nullptr)
   {
     context_ = HiredisCommand<>::createCluster(ip.c_str(), port);
@@ -51,7 +50,6 @@ class RedisClient {
     }
   }
 
-  int max_retries_;
   int timeout_;
 
   mutable redisReply* reply_;

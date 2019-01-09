@@ -28,9 +28,6 @@
 namespace po = boost::program_options;
 namespace bf = boost::filesystem;
 
-static const int kConnTimeout = 100;
-static const int kNumRetries = 10;
-
 volatile sig_atomic_t signal_flag = 0;
 
 void signal_handler(int sig) {
@@ -362,7 +359,7 @@ int main(int argc, char* argv[]) {
   LOG(INFO) << "Processor " << command_key << ": start connecting redis at "
             << params.redis_ip << ":" << params.redis_port;
 
-  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), kNumRetries, kConnTimeout);
+  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 100);
   LOG(INFO) << "Processor " << command_key << ": finish connecting to redis";
 
   try {

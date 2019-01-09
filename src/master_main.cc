@@ -337,7 +337,7 @@ int main(int argc, char* argv[]) {
 
   LOG(INFO) << "Master: start connecting redis at " << params.redis_ip << ":" << params.redis_port;
 
-  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 10, 100);
+  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 100);
 
   LOG(INFO) << "Master: finish connecting to redis";
 
