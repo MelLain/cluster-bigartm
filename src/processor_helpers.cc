@@ -7,7 +7,7 @@ namespace {
     float sum = 0.0f;
     for (int topic_index = 0; topic_index < topics_size; ++topic_index) {
       float val = n_td[topic_index];
-      if (val > 0) {
+      if (val > 0.0f) {
         sum += val;
       }
     }
@@ -174,7 +174,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
       float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
-      if (p_wd_val == 0) {
+      if (p_wd_val < 1e-16f) {
         continue;
       }
       blas->saxpy(num_topics, sparse_nwd.val()[i] / p_wd_val,

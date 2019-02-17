@@ -469,12 +469,12 @@ int main(int argc, char* argv[]) {
 
           Helpers::LoadBatch(batch_name, &batch);
           ProcessEStep(batch, *p_wt, n_wt, params.num_inner_iters, blas, &perplexity_value);
-          p_wt->ClearCache();
 
           LOG(INFO) << "Finish processing batch " << batch_name;
         }
         ++counter;
       }
+      p_wt->ClearCache();
 
       LOG(INFO) << "Local pre-perplexity value: " << perplexity_value;
 
