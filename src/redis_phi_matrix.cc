@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "redis_phi_matrix.h"
 
 int RedisPhiMatrix::token_size() const {
@@ -23,20 +25,20 @@ float RedisPhiMatrix::get(int token_id, int topic_id) const {
 }
 
 void RedisPhiMatrix::get(int token_id, std::vector<float>* buffer) const {
-  auto iter = cache_.find(token_id);
-  if (iter != cache_.end()) {
-    const auto& temp = iter->second;
+  if (use_cache_ && cache_.has_key(token_id)) {
+    // ToDo(mel-lain): check this call is really thread-safe
+    auto values_ptr = cache_.get(token_id);
     for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
-      (*buffer)[topic_id] = temp[topic_id];
+      (*buffer)[topic_id] = (*values_ptr)[topic_id];
     }
   } else {
-    std::vector<float> temp = redis_client_.get_values(to_key(token_id), topic_size());
+    std::vector<float> values = redis_client_.get_values(to_key(token_id), topic_size());
     for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
-      (*buffer)[topic_id] = temp[topic_id];
+      (*buffer)[topic_id] = values[topic_id];
     }
 
     if (use_cache_) {
-      cache_.emplace(token_id, temp);
+      cache_.set(token_id, std::make_shared<std::vector<float>>(values));
     }
   }
 }

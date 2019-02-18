@@ -286,27 +286,27 @@ void PrintTopTokens(RedisClient& redis_client,
     topics.push_back("topic_" + std::to_string(i));
   }
 
-  auto p_wt = RedisPhiMatrix(ModelName("pwt"), topics, redis_client);
+  auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, redis_client));
   auto zero_vector = std::vector<float>(num_topics, 0.0f);
 
   std::ifstream fin;
   std::string line;
   fin.open(vocab_path);
   while (std::getline(fin, line)) {
-    p_wt.AddToken(Token(DefaultClass, line), false, zero_vector);
+    p_wt->AddToken(Token(DefaultClass, line), false, zero_vector);
   }
   fin.close();
 
-  for (int i = 0; i < p_wt.topic_size(); ++i) {
+  for (int i = 0; i < p_wt->topic_size(); ++i) {
     std::vector<std::pair<Token, float>> pairs;
-    for (int j = 0; j < p_wt.token_size(); ++j) {
-      pairs.push_back(std::make_pair(p_wt.token(j), p_wt.get(j, i)));
+    for (int j = 0; j < p_wt->token_size(); ++j) {
+      pairs.push_back(std::make_pair(p_wt->token(j), p_wt->get(j, i)));
     }
     std::sort(pairs.begin(), pairs.end(),
               [](const std::pair<Token, float>& p1, const std::pair<Token, float>& p2) {
                 return p1.second > p2.second;
               });
-    std::cout << "\nTopic: " << p_wt.topic_name(i) << std::endl;
+    std::cout << "\nTopic: " << p_wt->topic_name(i) << std::endl;
     for (int j = 0; j < num_tokens; ++j) {
       std::cout << pairs[j].first.keyword << " (" << pairs[j].second << ")\n";
     }

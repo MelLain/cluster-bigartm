@@ -10,6 +10,7 @@
 #include "common.h"
 #include "phi_matrix.h"
 #include "token.h"
+#include "thread_safe_collection_holder.h"
 #include "redis_client.h"
 
 class RedisPhiMatrix : public PhiMatrix {
@@ -83,5 +84,5 @@ class RedisPhiMatrix : public PhiMatrix {
   TokenCollection token_collection_;
   RedisClient& redis_client_;
   bool use_cache_;
-  mutable std::unordered_map<int, std::vector<float>> cache_;
+  mutable ThreadSafeCollectionHolder<int, std::vector<float>> cache_;
 };
