@@ -474,6 +474,7 @@ int main(int argc, char* argv[]) {
         }
         ++counter;
       }
+      // ToDo(mel-lain): add option to clear per batch, not per iter
       p_wt->ClearCache();
 
       LOG(INFO) << "Local pre-perplexity value: " << perplexity_value;
