@@ -320,7 +320,7 @@ void ProcessEStep(const artm::Batch& batch,
                   std::shared_ptr<PhiMatrix> n_wt,
                   int num_inner_iters,
                   Blas* blas,
-                  float* perplexity_value) {
+                  double* perplexity_value) {
   std::shared_ptr<CsrMatrix<float>> sparse_ndw;
   sparse_ndw = ProcessorHelpers::InitializeSparseNdw(batch);
 
@@ -415,7 +415,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Gather total number of token slots in batches from "
               << params.batch_begin_index << " to " << params.batch_end_index;
 
-    double n = 0.0f;
+    double n = 0.0;
     counter = 0;
     for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(params.batches_dir_path), { })) {
       if (counter >= params.batch_begin_index && counter < params.batch_end_index) {
@@ -457,7 +457,7 @@ int main(int argc, char* argv[]) {
         break;
       };
 
-      float perplexity_value = 0.0f;
+      double perplexity_value = 0.0;
       counter = 0;
       LOG(INFO) << "Processor " << command_key << ": start processing of E-step";
 

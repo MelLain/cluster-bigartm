@@ -15,7 +15,7 @@ namespace {
     float sum_inv = sum > 0.0f ? (1.0f / sum) : 0.0f;
     for (int topic_index = 0; topic_index < topics_size; ++topic_index) {
       float val = sum_inv * (n_td[topic_index]);
-      if (val < 1e-16f) {
+      if (val < kProcessorEps) {
         val = 0.0f;
       }
 
@@ -73,7 +73,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
                                                     NwtWriteAdapter* nwt_writer,
                                                     Blas* blas,
                                                     int num_inner_iters,
-                                                    float* perplexity_value) {
+                                                    double* perplexity_value) {
   LocalThetaMatrix<float> n_td(theta_matrix->num_topics(), theta_matrix->num_items());
   const int num_topics = p_wt.topic_size();
   const int docs_count = theta_matrix->num_items();
@@ -174,18 +174,14 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
       float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
-      if (p_wd_val < 1e-16f) {
+      if (p_wd_val < kProcessorEps) {
         continue;
       }
       blas->saxpy(num_topics, sparse_nwd.val()[i] / p_wd_val,
         &(*theta_matrix)(0, d), 1, &n_wt_local[0], 1);  // NOLINT
 
       // compute perplexity
-      float perp_value = 0.0f;
-      for (int topic_index = 0; topic_index < num_topics; ++topic_index) {
-        perp_value += p_wt_local[topic_index] * (*theta_matrix)(topic_index, d);
-      }
-      *perplexity_value += sparse_nwd.val()[i] * log(perp_value > 0.0f ? perp_value : 1.0f);
+      *perplexity_value += p_wd_val > 0.0f ? static_cast<double>(sparse_nwd.val()[i] * log(p_wd_val)) : 0.0;
     }
 
     std::vector<float> values(num_topics, 0.0f);

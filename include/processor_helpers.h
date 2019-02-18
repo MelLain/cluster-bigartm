@@ -45,7 +45,7 @@ class ProcessorHelpers {
                                            NwtWriteAdapter* nwt_writer,
                                            Blas* blas,
                                            int num_inner_iters,
-                                           float* perplexity_value);
+                                           double* perplexity_value);
 
   ProcessorHelpers() = delete;
 };
