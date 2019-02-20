@@ -37,6 +37,7 @@ void signal_handler(int sig) {
 struct Parameters {
   int num_topics;
   int num_inner_iters;
+  int num_threads;
   std::string batches_dir_path;
   std::string vocab_path;
   std::string redis_ip;
@@ -51,18 +52,19 @@ struct Parameters {
 };
 
 void log_parameters(const Parameters& parameters) {
-    LOG(INFO) << "num-topics: "        << parameters.num_topics        << "; "
-              << "num-inner-iter: "    << parameters.num_inner_iters   << "; "
-              << "batches-dir-path: "  << parameters.batches_dir_path  << "; "
-              << "vocab-path: "        << parameters.vocab_path        << "; "
-              << "redis-ip: "          << parameters.redis_ip          << "; "
-              << "redis-port: "        << parameters.redis_port        << "; "
-              << "continue-fitting: "  << parameters.continue_fitting  << "; "
-              << "cache phi: "         << parameters.cache_phi         << "; "
+    LOG(INFO) << "num-topics:        " << parameters.num_topics        << "; "
+              << "num-inner-iter:    " << parameters.num_inner_iters   << "; "
+              << "num-threads:       " << parameters.num_threads       << "; "
+              << "batches-dir-path:  " << parameters.batches_dir_path  << "; "
+              << "vocab-path:        " << parameters.vocab_path        << "; "
+              << "redis-ip:          " << parameters.redis_ip          << "; "
+              << "redis-port:        " << parameters.redis_port        << "; "
+              << "continue-fitting:  " << parameters.continue_fitting  << "; "
+              << "cache phi:         " << parameters.cache_phi         << "; "
               << "token-begin-index: " << parameters.token_begin_index << "; "
-              << "token-end-index: "   << parameters.token_end_index   << "; "
+              << "token-end-index:   " << parameters.token_end_index   << "; "
               << "batch-begin-index: " << parameters.batch_begin_index << "; "
-              << "batch-end-index: "   << parameters.batch_end_index;
+              << "batch-end-index:   " << parameters.batch_end_index;
 }
 
 void check_parameters(const Parameters& parameters) {
@@ -72,6 +74,10 @@ void check_parameters(const Parameters& parameters) {
 
   if (parameters.num_inner_iters <= 0) {
     throw std::runtime_error("num_inner_iters should be a positive integer");
+  }
+
+  if (parameters.num_threads <= 0) {
+    throw std::runtime_error("num_threads should be a positive integer");
   }
 
   if (parameters.batches_dir_path == "") {
@@ -125,6 +131,7 @@ bool parse_and_print_parameters(int argc, char* argv[], Parameters* parameters) 
     ("help", "Show help")
     ("num-topics",        po::value(&parameters->num_topics)->default_value(1),         "Number of topics")  // NOLINT
     ("num-inner-iter",    po::value(&parameters->num_inner_iters)->default_value(1),    "Number of document passes")  // NOLINT
+    ("num-threads",       po::value(&parameters->num_threads)->default_value(1),        "Number of executor processor threads")  // NOLINT
     ("batches-dir-path",  po::value(&parameters->batches_dir_path)->default_value("."), "Path to files with documents")  // NOLINT
     ("vocab-path",        po::value(&parameters->vocab_path)->default_value("."),       "Path to files with documents")  // NOLINT
     ("redis-ip",          po::value(&parameters->redis_ip)->default_value(""),          "IP of redis instance")  // NOLINT
