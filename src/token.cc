@@ -2,7 +2,7 @@
 
 #include "token.h"
 
-int TokenCollection::AddToken(const Token& token) {
+int TokenCollection::add_token(const Token& token) {
   int token_id = this->token_id(token);
   if (token_id != -1) {
     return token_id;
@@ -14,7 +14,7 @@ int TokenCollection::AddToken(const Token& token) {
   return token_id;
 }
 
-void TokenCollection::Swap(TokenCollection* rhs) {
+void TokenCollection::swap(TokenCollection* rhs) {
   token_to_token_id_.swap(rhs->token_to_token_id_);
   token_id_to_token_.swap(rhs->token_id_to_token_);
 }
@@ -32,7 +32,7 @@ const Token& TokenCollection::token(int index) const {
   return token_id_to_token_[index];
 }
 
-void TokenCollection::Clear() {
+void TokenCollection::clear() {
   token_to_token_id_.clear();
   token_id_to_token_.clear();
 }

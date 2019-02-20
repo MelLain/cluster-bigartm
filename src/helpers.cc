@@ -19,7 +19,7 @@
 #include "token.h"
 
 
-long Helpers::GetPeakMemoryKb() {
+long Helpers::get_peak_memory_kb() {
   rusage info;
   if (!getrusage(RUSAGE_SELF, &info)) {
     return info.ru_maxrss;
@@ -27,7 +27,7 @@ long Helpers::GetPeakMemoryKb() {
   return 0;
 }
 
-std::vector<float> Helpers::GenerateRandomVector(int size, size_t seed) {
+std::vector<float> Helpers::generate_random_vector(int size, size_t seed) {
   std::vector<float> retval;
   retval.reserve(size);
 
@@ -50,7 +50,7 @@ std::vector<float> Helpers::GenerateRandomVector(int size, size_t seed) {
   return retval;
 }
 
-std::vector<float> Helpers::GenerateRandomVector(int size, const Token& token, int seed) {
+std::vector<float> Helpers::generate_random_vector(int size, const Token& token, int seed) {
   size_t h = 1125899906842597L;  // prime
 
   if (token.class_id != DefaultClass) {
@@ -69,10 +69,10 @@ std::vector<float> Helpers::GenerateRandomVector(int size, const Token& token, i
     h = 31 * h + seed;
   }
 
-  return GenerateRandomVector(size, h);
+  return generate_random_vector(size, h);
 }
 
-void Helpers::LoadBatch(const std::string& full_filename, artm::Batch* batch) {
+void Helpers::load_batch(const std::string& full_filename, artm::Batch* batch) {
   std::ifstream fin(full_filename.c_str(), std::ifstream::binary);
   if (!fin.is_open()) {
     throw std::runtime_error("Unable to open file " + full_filename);

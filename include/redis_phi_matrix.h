@@ -56,23 +56,23 @@ class RedisPhiMatrix : public PhiMatrix {
   void increase(int token_id, int topic_id, float increment);
   void increase(int token_id, const std::vector<float>& increment);
 
-  void Clear() { };
-  int AddToken(const Token& token, bool flag);
-  int AddToken(const Token& token, bool flag, const std::vector<float>& values);
+  void clear() { };
+  int add_token(const Token& token, bool flag);
+  int add_token(const Token& token, bool flag, const std::vector<float>& values);
 
-  void ClearCache() {
+  void clear_cache() {
     cache_.clear();
   }
 
   ~RedisPhiMatrix() {
-    ClearCache();
+    clear_cache();
   }
 
   bool use_cache() const {
     return use_cache_;
   }
 
-  std::shared_ptr<PhiMatrix> Duplicate() const {
+  std::shared_ptr<PhiMatrix> duplicate() const {
     throw std::runtime_error("RedisPhiMatrix doesn't support duplication");
   };
 

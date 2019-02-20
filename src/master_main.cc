@@ -34,127 +34,113 @@ void signal_handler(int sig) {
 struct Parameters {
   int num_topics;
   int num_outer_iters;
-  std::string executor_ids_path;
+  int num_executors;
   std::string batches_dir_path;
   std::string vocab_path;
   std::string redis_ip;
   std::string redis_port;
   int show_top_tokens;
   int continue_fitting;
-  int debug_print;
 };
 
-void LogParams(const Parameters& params) {
-  LOG(INFO) << "num-topics: "        << params.num_topics << "; "
-            << "num-outer-iter: "    << params.num_outer_iters << "; "
-            << "executor-ids-path: " << params.executor_ids_path << "; "
-            << "batches-dir-path: "  << params.batches_dir_path << "; "
-            << "vocab-path: "        << params.vocab_path << "; "
-            << "redis-ip: "          << params.redis_ip << "; "
-            << "redis-port: "        << params.redis_port << "; "
-            << "show-top-tokens: "   << params.show_top_tokens << "; "
-            << "continue-fitting: "  << params.continue_fitting;
+void log_parameters(const Parameters& parameters) {
+  LOG(INFO) << "num-topics:       " << parameters.num_topics       << "; "
+            << "num-outer-iter:   " << parameters.num_outer_iters  << "; "
+            << "num_executors:    " << parameters.num_executors    << "; "
+            << "batches-dir-path: " << parameters.batches_dir_path << "; "
+            << "vocab-path:       " << parameters.vocab_path       << "; "
+            << "redis-ip:         " << parameters.redis_ip         << "; "
+            << "redis-port:       " << parameters.redis_port       << "; "
+            << "show-top-tokens:  " << parameters.show_top_tokens  << "; "
+            << "continue-fitting: " << parameters.continue_fitting;
 }
 
-void CheckParams(const Parameters& params) {
-  if (params.num_topics <= 0) {
+void check_parameters(const Parameters& parameters) {
+  if (parameters.num_topics <= 0) {
     throw std::runtime_error("num_topics should be a positive integer");
   }
 
-  if (params.num_outer_iters <= 0) {
+  if (parameters.num_outer_iters <= 0) {
     throw std::runtime_error("num_outer_iters should be a positive integer");
   }
 
-  if (params.num_topics <= 0) {
+  if (parameters.num_topics <= 0) {
     throw std::runtime_error("num_topics should be a positive integer");
   }
 
+  if (parameters.num_executors <= 0) {
+    throw std::runtime_error("num_executors should be a positive integer");
+  }
 
-  if (params.batches_dir_path == "") {
+  if (parameters.batches_dir_path == "") {
     throw std::runtime_error("batches_dir_path should be non-empty");
   }
 
-  if (params.vocab_path == "") {
+  if (parameters.vocab_path == "") {
     throw std::runtime_error("vocab_path should be non-empty");
   }
 
-  if (params.executor_ids_path == "") {
-    throw std::runtime_error("executor_ids_path should be non-empty");
-  }
-
-  if (params.redis_ip == "") {
+  if (parameters.redis_ip == "") {
     throw std::runtime_error("redis_ip should be non-empty");
   }
 
-  if (params.redis_port == "") {
+  if (parameters.redis_port == "") {
     throw std::runtime_error("redis_port should be non-empty");
   }
 
-  if (params.continue_fitting != 0 && params.continue_fitting != 1) {
+  if (parameters.continue_fitting != 0 && parameters.continue_fitting != 1) {
     throw std::runtime_error("continue_fitting should be equal to 0 or 1");
   }
 
-  if (params.show_top_tokens != 0 && params.show_top_tokens != 1) {
+  if (parameters.show_top_tokens != 0 && parameters.show_top_tokens != 1) {
     throw std::runtime_error("show_top_tokens should be equal to 0 or 1");
   }
 }
 
-bool ParseAndPrintArgs(int argc, char* argv[], Parameters* p) {
+bool parse_and_print_parameters(int argc, char* argv[], Parameters* parameters) {
   po::options_description all_options("Options");
   all_options.add_options()
     ("help", "Show help")
-    ("num-topics", po::value(&p->num_topics)->default_value(1), "number of topics")
-    ("num-outer-iter", po::value(&p->num_outer_iters)->default_value(1), "number of collection passes")
-    ("executor-ids-path", po::value(&p->executor_ids_path)->default_value("."), "path to ids of all working processes")
-    ("batches-dir-path", po::value(&p->batches_dir_path)->default_value("."), "path to batches with documents")
-    ("vocab-path", po::value(&p->vocab_path)->default_value("."), "path to file with vocabulary")
-    ("redis-ip", po::value(&p->redis_ip)->default_value(""), "ip of redis instance")
-    ("redis-port", po::value(&p->redis_port)->default_value(""), "port of redis instance")
-    ("show-top-tokens", po::value(&p->show_top_tokens)->default_value(0), "1 - print top tokens, 0 - not")
-    ("continue-fitting", po::value(&p->continue_fitting)->default_value(0), "1 - continue fitting redis model, 0 - restart")
+    ("num-topics",       po::value(&parameters->num_topics)->default_value(1),         "Number of topics")  // NOLINT
+    ("num-outer-iter",   po::value(&parameters->num_outer_iters)->default_value(1),    "Number of collection passes")  // NOLINT
+    ("num-executors",    po::value(&parameters->num_executors)->default_value(1),      "Number of working processes")  // NOLINT
+    ("batches-dir-path", po::value(&parameters->batches_dir_path)->default_value("."), "Path to batches with documents")  // NOLINT
+    ("vocab-path",       po::value(&parameters->vocab_path)->default_value("."),       "Path to file with vocabulary")  // NOLINT
+    ("redis-ip",         po::value(&parameters->redis_ip)->default_value(""),          "IP of redis instance")  // NOLINT
+    ("redis-port",       po::value(&parameters->redis_port)->default_value(""),        "Port of redis instance")  // NOLINT
+    ("show-top-tokens",  po::value(&parameters->show_top_tokens)->default_value(0),    "1 - print top tokens, 0 - not")  // NOLINT
+    ("continue-fitting", po::value(&parameters->continue_fitting)->default_value(0),   "1 - continue fitting redis model, 0 - restart")  // NOLINT
     ;
 
-  po::variables_map vm;
-  store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
-  notify(vm);
+  po::variables_map variables_map;
+  store(po::command_line_parser(argc, argv).options(all_options).run(), variables_map);
+  notify(variables_map);
 
-  bool show_help = (vm.count("help") > 0);
+  bool show_help = (variables_map.count("help") > 0);
   if (show_help) {
     std::cerr << all_options;
     return true;
   }
 
-  std::cout << "num-topics:        " << p->num_topics << std::endl;
-  std::cout << "num-outer-iter:    " << p->num_outer_iters << std::endl;
-  std::cout << "executor-ids-path: " << p->executor_ids_path << std::endl;
-  std::cout << "batches-dir-path:  " << p->batches_dir_path << std::endl;
-  std::cout << "vocab-path:        " << p->vocab_path << std::endl;
-  std::cout << "redis-ip:          " << p->redis_ip << std::endl;
-  std::cout << "redis-port:        " << p->redis_port << std::endl;
-  std::cout << "show-top-tokens:   " << p->show_top_tokens << std::endl;
-  std::cout << "continue-fitting:  " << p->continue_fitting << std::endl;
+  std::cout << "num-topics:       " << parameters->num_topics        << std::endl;
+  std::cout << "num-outer-iter:   " << parameters->num_outer_iters   << std::endl;
+  std::cout << "num-executors:    " << parameters->num_executors     << std::endl;
+  std::cout << "batches-dir-path: " << parameters->batches_dir_path  << std::endl;
+  std::cout << "vocab-path:       " << parameters->vocab_path        << std::endl;
+  std::cout << "redis-ip:         " << parameters->redis_ip          << std::endl;
+  std::cout << "redis-port:       " << parameters->redis_port        << std::endl;
+  std::cout << "show-top-tokens:  " << parameters->show_top_tokens   << std::endl;
+  std::cout << "continue-fitting: " << parameters->continue_fitting  << std::endl;
 
   return false;
 }
 
-std::vector<std::string> GetExecutorIds(const std::string& executor_ids_path) {
-  std::vector<std::string> retval;
-  std::ifstream fin;
-  std::string line;
-
-  fin.open(executor_ids_path);
-  while (std::getline(fin, line)) {
-    retval.push_back(line);
-  }
-  fin.close();
-  return retval;
-}
-
-bool CheckFinishedOrTerminated(const RedisClient& redis_client,
-                               const std::vector<std::string>& command_keys,
-                               const std::string& old_flag,
-                               const std::string& new_flag,
-                               int timeout = -1) {
+bool check_finished_or_terminated(const RedisClient& redis_client,
+                                  const std::vector<std::string>& command_keys,
+                                  const std::string& old_flag,
+                                  const std::string& new_flag,
+                                  int timeout = -1)
+{
   int time_passed = 0;
   bool terminated = false;
   while (true) {
@@ -195,13 +181,13 @@ bool CheckFinishedOrTerminated(const RedisClient& redis_client,
   return false;
 }
 
-
 // this function firstly check the availability of executor and then send him new command,
 // it's not fully safe, as if the executor fails in between get and set, it will cause
 // endless loop during the next syncronozation
-bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
-                                 const std::vector<std::string>& command_keys,
-                                 const std::string& flag) {
+bool check_non_terminated_and_update(const RedisClient& redis_client,
+                                     const std::vector<std::string>& command_keys,
+                                     const std::string& flag)
+{
   if (signal_flag) {
     LOG(ERROR) << "SIGINT has been caught, start terminating" << std::endl;
     return false;
@@ -221,7 +207,6 @@ bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
   return true;
 }
 
-
 // protocol:
 // 1) set everyone START_NORMALIZATION flag
 // 2) wait for everyone to set FINISH_NORMALIZATION flag
@@ -229,15 +214,16 @@ bool CheckNonTerminatedAndUpdate(const RedisClient& redis_client,
 // 4) merge results and put final n_t into data slots
 // 5) set everyone START_NORMALIZATION flag
 // 6) wait for everyone to set FINISH_NORMALIZATION flag
-bool NormalizeNwt(const RedisClient& redis_client,
+bool normalize_nwt(const RedisClient& redis_client,
                   const std::vector<std::string>& command_keys,
                   const std::vector<std::string>& data_keys,
-                  int num_topics) {
-  if (!CheckNonTerminatedAndUpdate(redis_client, command_keys, START_NORMALIZATION)) {
+                  int num_topics)
+{
+  if (!check_non_terminated_and_update(redis_client, command_keys, START_NORMALIZATION)) {
     return false;
   }
 
-  if (!CheckFinishedOrTerminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
+  if (!check_finished_or_terminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
     return false;
   }
 
@@ -264,23 +250,23 @@ bool NormalizeNwt(const RedisClient& redis_client,
     redis_client.set_hashmap(key, n_t);
   }
 
-  if (!CheckNonTerminatedAndUpdate(redis_client, command_keys, START_NORMALIZATION)) {
+  if (!check_non_terminated_and_update(redis_client, command_keys, START_NORMALIZATION)) {
     return false;
   }
 
-  if (!CheckFinishedOrTerminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
+  if (!check_finished_or_terminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
     return false;
   }
 
   return true;
 }
 
-
 // ToDo(MelLain): rewrite this function, as it is very inefficient and hacked now
-void PrintTopTokens(RedisClient& redis_client,
-                    const std::string& vocab_path,
-                    int num_topics,
-                    int num_tokens = 10) {
+void print_top_tokens(RedisClient& redis_client,
+                      const std::string& vocab_path,
+                      int num_topics,
+                      int num_tokens = 10)
+{
   std::vector<std::string> topics;
   for (int i = 0; i < num_topics; ++i) {
     topics.push_back("topic_" + std::to_string(i));
@@ -293,7 +279,7 @@ void PrintTopTokens(RedisClient& redis_client,
   std::string line;
   fin.open(vocab_path);
   while (std::getline(fin, line)) {
-    p_wt->AddToken(Token(DefaultClass, line), false, zero_vector);
+    p_wt->add_token(Token(DefaultClass, line), false, zero_vector);
   }
   fin.close();
 
@@ -313,15 +299,14 @@ void PrintTopTokens(RedisClient& redis_client,
   }
 }
 
-
 // In case of fault of master without exceptions and SIGINT signal all sub-processes
 // (executors) can be killed within a single node via command:
 // ps -ef | grep './executor_main' | grep -v grep | awk '{print $2}' | xargs kill -9
 int main(int argc, char* argv[]) {
   signal(SIGINT, signal_handler);
 
-  Parameters params;
-  bool is_help_call = ParseAndPrintArgs(argc, argv, &params);
+  Parameters parameters;
+  bool is_help_call = parse_and_print_parameters(argc, argv, &parameters);
   if (is_help_call) {
     return 0;
   }
@@ -332,12 +317,12 @@ int main(int argc, char* argv[]) {
   std::string log_file = std::string("cluster-bigartm-master");
   google::InitGoogleLogging(log_file.c_str());  
 
-  LogParams(params);
-  CheckParams(params);
+  log_parameters(parameters);
+  check_parameters(parameters);
 
-  LOG(INFO) << "Master: start connecting redis at " << params.redis_ip << ":" << params.redis_port;
+  LOG(INFO) << "Master: start connecting redis at " << parameters.redis_ip << ":" << parameters.redis_port;
 
-  RedisClient redis_client = RedisClient(params.redis_ip, std::stoi(params.redis_port), 100);
+  RedisClient redis_client = RedisClient(parameters.redis_ip, std::stoi(parameters.redis_port), 100);
 
   LOG(INFO) << "Master: finish connecting to redis";
 
@@ -345,10 +330,9 @@ int main(int argc, char* argv[]) {
   std::vector<std::string> executor_data_keys;
 
   LOG(INFO) << "Master: start creating ids";
-
-  for (const std::string& id : GetExecutorIds(params.executor_ids_path)) {
-    executor_command_keys.push_back(generate_command_key(id));
-    executor_data_keys.push_back(generate_data_key(id));
+  for (int executor_id = 0; executor_id < parameters.num_executors; ++executor_id) {
+    executor_command_keys.push_back(generate_command_key(executor_id));
+    executor_data_keys.push_back(generate_data_key(executor_id));
   }
 
   LOG(INFO) << "Master: finish creating ids";
@@ -358,19 +342,19 @@ int main(int argc, char* argv[]) {
     // didn't response, it means, that it had failed to start
     LOG(INFO) << "Master: start connecting to processors";
 
-    bool ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
-                                        START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
+    bool ok = check_finished_or_terminated(redis_client, executor_command_keys,
+                                           START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
     if (!ok) { throw std::runtime_error("Master: step 0, got termination status"); }
 
     LOG(INFO) << "Master: finish connecting to processors";
 
     LOG(INFO) << "Master: start initialization";
 
-    ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_INITIALIZATION);
+    ok = check_non_terminated_and_update(redis_client, executor_command_keys, START_INITIALIZATION);
     if (!ok) { throw std::runtime_error("Master: step 1 start, got termination status"); }
 
-    ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
-                                   START_INITIALIZATION, FINISH_INITIALIZATION);
+    ok = check_finished_or_terminated(redis_client, executor_command_keys,
+                                      START_INITIALIZATION, FINISH_INITIALIZATION);
     if (!ok) { throw std::runtime_error("Master: step 1 finish, got termination status"); }
 
     LOG(INFO) << "Master: finish initialization";
@@ -383,21 +367,20 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Master: all executors have started! Total number of token slots in collection: " << n;
     std::cout << "Master: all executors have started! Total number of token slots in collection: " << n << std::endl;
 
-    if (!params.continue_fitting) {
-      if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
+    if (!parameters.continue_fitting) {
+      if (!normalize_nwt(redis_client, executor_command_keys, executor_data_keys, parameters.num_topics)) {
         throw std::runtime_error("Step 2, got termination status");
       }
     }
 
     // EM-iterations
-    for (int iteration = 0; iteration < params.num_outer_iters; ++iteration) {
+    for (int iteration = 0; iteration < parameters.num_outer_iters; ++iteration) {
       LOG(INFO) << "Master: start iteration " << iteration;
 
-      ok = CheckNonTerminatedAndUpdate(redis_client, executor_command_keys, START_ITERATION);
+      ok = check_non_terminated_and_update(redis_client, executor_command_keys, START_ITERATION);
       if (!ok) { throw std::runtime_error("Step 3 start, got termination status"); }
 
-      ok = CheckFinishedOrTerminated(redis_client, executor_command_keys,
-                                     START_ITERATION, FINISH_ITERATION);
+      ok = check_finished_or_terminated(redis_client, executor_command_keys, START_ITERATION, FINISH_ITERATION);
       if (!ok) { throw std::runtime_error("Step 3 intermediate, got termination status"); }
 
       double perplexity_value = 0.0;
@@ -407,13 +390,14 @@ int main(int argc, char* argv[]) {
 
       LOG(INFO) << "Master: finish e-step, start m-step";
 
-      if (!NormalizeNwt(redis_client, executor_command_keys, executor_data_keys, params.num_topics)) {
+      if (!normalize_nwt(redis_client, executor_command_keys, executor_data_keys, parameters.num_topics)) {
         throw std::runtime_error("Step 3 finish, got termination status");
       }
 
-      LOG(INFO) << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value);
-      std::cout << "Iteration: " << iteration << ", perplexity: " << exp(-(1.0f / n) * perplexity_value) << std::endl;
-      LOG(INFO) << "Iteration: " << iteration << ", maxrss: " << Helpers::GetPeakMemoryKb() << " KB";
+      perplexity_value = exp(-(1.0f / n) * perplexity_value);
+      LOG(INFO) << "Iteration: " << iteration << ", perplexity: " << perplexity_value;
+      std::cout << "Iteration: " << iteration << ", perplexity: " << perplexity_value << std::endl;
+      LOG(INFO) << "Iteration: " << iteration << ", maxrss: " << Helpers::get_peak_memory_kb() << " KB";
     }
 
     // finalization (correct in any way)
@@ -427,14 +411,14 @@ int main(int argc, char* argv[]) {
     }
     throw;
   }
-  CheckFinishedOrTerminated(redis_client, executor_command_keys, START_TERMINATION, FINISH_TERMINATION);
+  check_finished_or_terminated(redis_client, executor_command_keys, START_TERMINATION, FINISH_TERMINATION);
 
-  if (params.show_top_tokens) {
-    PrintTopTokens(redis_client, params.vocab_path, params.num_topics);
+  if (parameters.show_top_tokens) {
+    print_top_tokens(redis_client, parameters.vocab_path, parameters.num_topics);
   }
 
   LOG(INFO) << "Model fitting is finished!";
-  LOG(INFO) << "final maxrss= " << Helpers::GetPeakMemoryKb() << " KB";
+  LOG(INFO) << "final maxrss= " << Helpers::get_peak_memory_kb() << " KB";
 
   return 0;
 }

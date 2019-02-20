@@ -69,18 +69,18 @@ void RedisPhiMatrix::increase(int token_id, const std::vector<float>& increment)
   }
 }
 
-int RedisPhiMatrix::AddToken(const Token& token, bool flag) {
+int RedisPhiMatrix::add_token(const Token& token, bool flag) {
   auto values = std::vector<float>(topic_size(), 0.0f);
-  return AddToken(token, flag, values);
+  return add_token(token, flag, values);
 }
 
-int RedisPhiMatrix::AddToken(const Token& token, bool flag, const std::vector<float>& values) {
+int RedisPhiMatrix::add_token(const Token& token, bool flag, const std::vector<float>& values) {
   int token_id = token_collection_.token_id(token);
   if (token_id != -1) {
     return token_id;
   }
   
-  int index = token_collection_.AddToken(token);
+  int index = token_collection_.add_token(token);
   if (flag) {
     redis_client_.set_values(to_key(index), values);
   }

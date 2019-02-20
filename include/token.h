@@ -20,7 +20,7 @@ struct Token {
   Token(const ClassId& _class_id, const std::string& _keyword)
       : keyword(_keyword)
       , class_id(_class_id)
-      , hash_(calcHash(_class_id, _keyword)) { }
+      , hash_(calc_hash(_class_id, _keyword)) { }
 
   Token& operator=(const Token &rhs) {
     if (this != &rhs) {
@@ -56,7 +56,7 @@ struct Token {
  private:
   const size_t hash_;
 
-  static size_t calcHash(const ClassId& class_id, const std::string& keyword) {
+  static size_t calc_hash(const ClassId& class_id, const std::string& keyword) {
     size_t hash = 0;
     boost::hash_combine<std::string>(hash, keyword);
     boost::hash_combine<std::string>(hash, class_id);
@@ -72,9 +72,9 @@ struct TokenHasher {
 
 class TokenCollection {
  public:
-  void Clear();
-  int  AddToken(const Token& token);
-  void Swap(TokenCollection* rhs);
+  void clear();
+  int  add_token(const Token& token);
+  void swap(TokenCollection* rhs);
 
   int token_size() const;
   bool has_token(const Token& token) const;
