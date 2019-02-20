@@ -15,7 +15,7 @@ namespace {
     float sum_inv = sum > 0.0f ? (1.0f / sum) : 0.0f;
     for (int topic_index = 0; topic_index < topics_size; ++topic_index) {
       float val = sum_inv * (n_td[topic_index]);
-      if (val < kProcessorEps) {
+      if (val < kEps) {
         val = 0.0f;
       }
 
@@ -60,7 +60,7 @@ std::shared_ptr<CsrMatrix<float>> ProcessorHelpers::initialize_sparse_ndw(const 
 }
 
 void ProcessorHelpers::find_batch_token_ids(const artm::Batch& batch,
-                                            const PhiMatrix& phi_matrix,
+                                            const RedisPhiMatrixAdapter& phi_matrix,
                                             std::vector<int>* token_id)
 {
   token_id->resize(batch.token_size(), -1);
@@ -71,7 +71,7 @@ void ProcessorHelpers::find_batch_token_ids(const artm::Batch& batch,
 
 void ProcessorHelpers::infer_theta_and_update_nwt_sparse(const artm::Batch& batch,
                                                          const CsrMatrix<float>& sparse_ndw,
-                                                         const PhiMatrix& p_wt,
+                                                         const RedisPhiMatrixAdapter& p_wt,
                                                          LocalThetaMatrix<float>* theta_matrix,
                                                          NwtWriteAdapter* nwt_writer,
                                                          Blas* blas,
@@ -107,7 +107,7 @@ void ProcessorHelpers::infer_theta_and_update_nwt_sparse(const artm::Batch& batc
     bool item_has_tokens = false;
     for (int i = begin_index; i < end_index; ++i) {
       int w = sparse_ndw.col_ind()[i];
-      if (token_id[w] == PhiMatrix::kUndefIndex) {
+      if (token_id[w] == RedisPhiMatrix::kUndefIndex) {
         continue;
       }
       item_has_tokens = true;
@@ -178,7 +178,7 @@ void ProcessorHelpers::infer_theta_and_update_nwt_sparse(const artm::Batch& batc
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
       float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
-      if (p_wd_val < kProcessorEps) {
+      if (p_wd_val < kEps) {
         continue;
       }
       blas->saxpy(num_topics, sparse_nwd.val()[i] / p_wd_val,

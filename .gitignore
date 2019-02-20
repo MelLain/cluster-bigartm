@@ -13,6 +13,7 @@ messages.pb.cc
 *INFO*
 *WARN*
 *ERROR*
+*FATAL*
 appendonly.aof
 dump.rdb
 redis-nodes.conf
