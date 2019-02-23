@@ -64,6 +64,7 @@ def main():
 			batch_indices[executor_id][0],
 			batch_indices[executor_id][1])
 
+		print '{} {} &'.format(cmd_str, additional_args)
 		os.popen('{} {} &'.format(cmd_str, additional_args))
 
 if __name__ == '__main__':

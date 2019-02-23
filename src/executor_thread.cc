@@ -168,9 +168,10 @@ void ExecutorThread::thread_function() {
 
     LOG(INFO) << "Executor thread " << command_key_ << ": start preparations";
     double n = 0.0;
-    int counter = 0;
+    int num_batches_counter = 0;
+    int num_batches_processed = 0;
     for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(batches_dir_path_), { })) {
-      if (counter >= batch_begin_index_ && counter < batch_end_index_) {
+      if (num_batches_counter >= batch_begin_index_ && num_batches_counter < batch_end_index_) {
         artm::Batch batch;
         Helpers::load_batch(entry.path().string(), &batch);
         for (const auto& item : batch.item()) {
@@ -178,13 +179,14 @@ void ExecutorThread::thread_function() {
             n += static_cast<double>(val);
           }
         }
+        ++num_batches_processed;
       }
-      ++counter;
+      ++num_batches_counter;
     }
 
     redis_client_->set_value(data_key_, std::to_string(n));
     LOG(INFO) << "Executor thread " << command_key_ << ": finish preparations, total number of slots: "
-              << n << " from " << counter << " batches";
+              << n << " from " << num_batches_processed << " batches";
 
     if (!check_non_terminated_and_update(FINISH_INITIALIZATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
@@ -210,26 +212,26 @@ void ExecutorThread::thread_function() {
       };
 
       double perplexity_value = 0.0;
-      counter = 0;
+      int counter = 0;
       LOG(INFO) << "Executor thread " << command_key_ << ": start processing of E-step";
 
       for(const auto& entry : boost::make_iterator_range(bf::directory_iterator(batches_dir_path_), { })) {
         if (counter >= batch_begin_index_ && counter < batch_end_index_) {
           artm::Batch batch;
           const std::string batch_name = entry.path().string();
-          LOG(INFO) << "Start processing batch " << batch_name;
+          LOG(INFO) << "Executor thread " << command_key_ << ": start processing batch " << batch_name;
 
           Helpers::load_batch(batch_name, &batch);
           process_e_step(batch, blas, &perplexity_value);
 
-          LOG(INFO) << "Finish processing batch " << batch_name;
+          LOG(INFO) << "Executor thread " << command_key_ << ": finish processing batch " << batch_name;
         }
         ++counter;
       }
       // ToDo(MelLain): add option to clear per batch, not per iter
       p_wt_->clear_cache();
 
-      LOG(INFO) << "Local pre-perplexity value: " << perplexity_value;
+      LOG(INFO) << "Executor thread " << command_key_ << ": local pre-perplexity value: " << perplexity_value;
 
       redis_client_->set_value(data_key_, std::to_string(perplexity_value));
 
@@ -247,7 +249,7 @@ void ExecutorThread::thread_function() {
       LOG(INFO) << "Executor thread " << command_key_ << ": maxrss= " << Helpers::get_peak_memory_kb() << " KB";
     }
   } catch (const std::exception& error) {
-    LOG(FATAL) << "Error in thread " << command_key_ + ": " + error.what();
+    LOG(FATAL) << "Error in thread " << command_key_ << ": " << error.what();
   } catch (...) {
     LOG(FATAL) << "Unknown error in thread " << command_key_;
   }

@@ -56,6 +56,9 @@ bool is_stopping() {
   if (thread_.joinable()) {
     thread_.join();
   }
+
+  LOG(INFO) << "Executor thread " << command_key_ << ": stopping";
+
   // ToDo(MelLain): this set doesn't work, inspect it
   redis_client_->set_value(command_key_, FINISH_TERMINATION);
 }

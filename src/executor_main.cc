@@ -166,13 +166,6 @@ std::vector<std::pair<int, int>> get_indices(int num_threads, int begin_index, i
   return retval;
 }
 
-//bool wait_for_termination() {
-    //if (signal_flag) {
-      //LOG(ERROR) << "SIGINT has been caught, start terminating" << std::endl;
-      //return false;
-    //}
-//}
-
 int main(int argc, char* argv[]) {
   //signal(SIGINT, signal_handler);
 
@@ -225,7 +218,7 @@ int main(int argc, char* argv[]) {
       topics.push_back("topic_" + std::to_string(i));
     }
 
-    LOG(INFO) << "Executor " << executor_id << ": start creating of matrices";
+    LOG(INFO) << "Executor " << executor_id << ": start creating matrices";
 
     bool use_cache = (parameters.cache_phi == 1);
     auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, use_cache));
@@ -262,13 +255,16 @@ int main(int argc, char* argv[]) {
 
     std::vector<std::shared_ptr<ExecutorThread>> threads;
     for (int thread_id = 0; thread_id < parameters.num_threads; ++thread_id) {
-      auto thread_redis_client = std::shared_ptr<RedisClient>(
-          new RedisClient(parameters.redis_ip, std::stoi(parameters.redis_port)));
+      std::string ip = parameters.redis_ip;
+      int port = std::stoi(parameters.redis_port);
+      auto thread_client = std::shared_ptr<RedisClient>(new RedisClient(ip, port));
+      auto p_wt_client = std::shared_ptr<RedisClient>(new RedisClient(ip, port));
+      auto n_wt_client = std::shared_ptr<RedisClient>(new RedisClient(ip, port));
 
       threads.push_back(std::shared_ptr<ExecutorThread>(
         new ExecutorThread(command_keys[thread_id],
                            data_keys[thread_id],
-                           thread_redis_client,
+                           thread_client,
                            continue_fitting,
                            parameters.batches_dir_path,
                            token_indices[thread_id].first,
@@ -276,8 +272,8 @@ int main(int argc, char* argv[]) {
                            batch_indices[thread_id].first,
                            batch_indices[thread_id].second,
                            parameters.num_inner_iters,
-                           std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(p_wt, thread_redis_client)),
-                           std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(n_wt, thread_redis_client)))
+                           std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(p_wt, p_wt_client)),
+                           std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(n_wt, n_wt_client)))
       ));
     }
 
@@ -295,12 +291,10 @@ int main(int argc, char* argv[]) {
       }
       usleep(2000);
     }
-
-    //if (!wait_for_termination()) {
-    //}
+  } catch (const std::exception& error) {
+    LOG(FATAL) << "Error in executor " << executor_id << ": " << error.what();
   } catch (...) {
-    // ToDo(MelLain): add correct handling
-    throw;
+    LOG(FATAL) << "Unknown error in executor " << executor_id;
   }
 
   return 0;

@@ -351,13 +351,13 @@ int main(int argc, char* argv[]) {
   std::cout << "Master: finish creating ids" << std::endl;
 
   try {
-    // we give 1.0 sec to all executors to start, if even one of them
+    // we give 5.0 sec to all executors to start, if even one of them
     // didn't response, it means that the start failed
     LOG(INFO) << "Master: start connecting to processors";
     std::cout << "Master: start connecting to processors" << std::endl;
 
     bool ok = check_finished_or_terminated(redis_client, executor_command_keys,
-                                           START_GLOBAL_START, FINISH_GLOBAL_START, 1000000);
+                                           START_GLOBAL_START, FINISH_GLOBAL_START, 5000000);
     if (!ok) { throw std::runtime_error("Master: step 0, got termination status"); }
 
     LOG(INFO) << "Master: finish connecting to processors";
