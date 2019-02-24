@@ -26,6 +26,7 @@ class ExecutorThread : boost::noncopyable {
   	                      int batch_begin_index,
   	                      int batch_end_index,
   	                      int num_inner_iters,
+                          const std::string& caching_phi_mode,
   	                      std::shared_ptr<RedisPhiMatrixAdapter> p_wt,
   	                      std::shared_ptr<RedisPhiMatrixAdapter> n_wt)
     : command_key_(command_key)
@@ -38,6 +39,7 @@ class ExecutorThread : boost::noncopyable {
     , batch_begin_index_(batch_begin_index)
     , batch_end_index_(batch_end_index)
     , num_inner_iters_(num_inner_iters)
+    , caching_phi_mode_(caching_phi_mode)
     , p_wt_(p_wt)
     , n_wt_(n_wt)
     , is_stopping_(false)
@@ -74,6 +76,7 @@ bool is_stopping() {
   int batch_begin_index_;
   int batch_end_index_;
   int num_inner_iters_;
+  std::string caching_phi_mode_;
   std::shared_ptr<RedisPhiMatrixAdapter> p_wt_;
   std::shared_ptr<RedisPhiMatrixAdapter> n_wt_;
 

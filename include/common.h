@@ -20,6 +20,10 @@ const float kEps = 1e-16f;
 
 const int kDefaultTimeout = 100;
 
+const std::string CACHING_PHI_MODE_NONE = "none";
+const std::string CACHING_PHI_MODE_BATCH = "batch";
+const std::string CACHING_PHI_MODE_ITERATION = "iteration";
+
 typedef std::unordered_map<std::string, std::vector<double>> Normalizers;
 
 inline std::vector<std::string> generate_command_keys(int executor_id, int num_threads) {

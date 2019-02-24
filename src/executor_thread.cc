@@ -225,11 +225,17 @@ void ExecutorThread::thread_function() {
           process_e_step(batch, blas, &perplexity_value);
 
           LOG(INFO) << "Executor thread " << command_key_ << ": finish processing batch " << batch_name;
+
+          if (caching_phi_mode_ == CACHING_PHI_MODE_BATCH) {
+            p_wt_->clear_cache();
+          }
         }
         ++counter;
       }
-      // ToDo(MelLain): add option to clear per batch, not per iter
-      p_wt_->clear_cache();
+
+      if (caching_phi_mode_ == CACHING_PHI_MODE_ITERATION) {
+        p_wt_->clear_cache();
+      }
 
       LOG(INFO) << "Executor thread " << command_key_ << ": local pre-perplexity value: " << perplexity_value;
 

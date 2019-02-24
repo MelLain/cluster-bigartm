@@ -38,7 +38,8 @@ struct Parameters {
   std::string redis_ip;
   std::string redis_port;
   int continue_fitting;
-  int cache_phi;
+  std::string caching_phi_mode;
+  int delayed_update;
   int token_begin_index;
   int token_end_index;
   int batch_begin_index;
@@ -55,7 +56,8 @@ void log_parameters(const Parameters& parameters) {
               << "redis-ip: "          << parameters.redis_ip          << "; "
               << "redis-port: "        << parameters.redis_port        << "; "
               << "continue-fitting: "  << parameters.continue_fitting  << "; "
-              << "cache phi: "         << parameters.cache_phi         << "; "
+              << "caching-phi-mode: "  << parameters.caching_phi_mode  << "; "
+              << "delayed-update: "    << parameters.delayed_update    << "; "
               << "token-begin-index: " << parameters.token_begin_index << "; "
               << "token-end-index: "   << parameters.token_end_index   << "; "
               << "batch-begin-index: " << parameters.batch_begin_index << "; "
@@ -96,8 +98,15 @@ void check_parameters(const Parameters& parameters) {
     throw std::runtime_error("continue_fitting should be equal to 0 or 1");
   }
 
-  if (parameters.cache_phi != 0 && parameters.cache_phi != 1) {
-    throw std::runtime_error("cache_phi should be equal to 0 or 1");
+  if (parameters.caching_phi_mode != CACHING_PHI_MODE_NONE &&
+      parameters.caching_phi_mode != CACHING_PHI_MODE_BATCH &&
+      parameters.caching_phi_mode != CACHING_PHI_MODE_ITERATION)
+  {
+    throw std::runtime_error("caching_phi_mode should be int none|iteration|batch");
+  }
+
+  if (parameters.delayed_update != 0 && parameters.delayed_update != 1) {
+    throw std::runtime_error("delayed_update should be equal to 0 or 1");
   }
 
   if (parameters.redis_port == "") {
@@ -125,20 +134,21 @@ bool parse_and_print_parameters(int argc, char* argv[], Parameters* parameters) 
   po::options_description all_options("Options");
   all_options.add_options()
     ("help", "Show help")
-    ("num-topics",        po::value(&parameters->num_topics)->default_value(1),         "Number of topics")  // NOLINT
-    ("num-inner-iter",    po::value(&parameters->num_inner_iters)->default_value(1),    "Number of document passes")  // NOLINT
-    ("num-threads",       po::value(&parameters->num_threads)->default_value(1),        "Number of executor processor threads")  // NOLINT
-    ("batches-dir-path",  po::value(&parameters->batches_dir_path)->default_value("."), "Path to files with documents")  // NOLINT
-    ("vocab-path",        po::value(&parameters->vocab_path)->default_value("."),       "Path to files with documents")  // NOLINT
-    ("redis-ip",          po::value(&parameters->redis_ip)->default_value(""),          "IP of redis instance")  // NOLINT
-    ("redis-port",        po::value(&parameters->redis_port)->default_value(""),        "Port of redis instance")  // NOLINT
-    ("continue-fitting",  po::value(&parameters->continue_fitting)->default_value(0),   "1 - continue fitting redis model, 0 - restart")  // NOLINT
-    ("cache-phi",         po::value(&parameters->cache_phi)->default_value(0),          "1 - cache phi matrix per iter, 0 - go to redis")  // NOLINT
-    ("token-begin-index", po::value(&parameters->token_begin_index)->default_value(0),  "Index of token to init/norm from")  // NOLINT
-    ("token-end-index",   po::value(&parameters->token_end_index)->default_value(0),    "Index of token to init/norm to (excluding)")  // NOLINT
-    ("batch-begin-index", po::value(&parameters->batch_begin_index)->default_value(0),  "Index of batch to process from")  // NOLINT
-    ("batch-end-index",   po::value(&parameters->batch_end_index)->default_value(0),    "Index of batch to process to (excluding)")  // NOLINT
-    ("executor-id",       po::value(&parameters->executor_id)->default_value(-1),       "Unique identifier of the process")  // NOLINT
+    ("num-topics",        po::value(&parameters->num_topics)->default_value(1),            "Number of topics")                                // NOLINT
+    ("num-inner-iter",    po::value(&parameters->num_inner_iters)->default_value(1),       "Number of document passes")                       // NOLINT
+    ("num-threads",       po::value(&parameters->num_threads)->default_value(1),           "Number of executor processor threads")            // NOLINT
+    ("batches-dir-path",  po::value(&parameters->batches_dir_path)->default_value("."),    "Path to files with documents")                    // NOLINT
+    ("vocab-path",        po::value(&parameters->vocab_path)->default_value("."),          "Path to files with documents")                    // NOLINT
+    ("redis-ip",          po::value(&parameters->redis_ip)->default_value(""),             "IP of redis instance")                            // NOLINT
+    ("redis-port",        po::value(&parameters->redis_port)->default_value(""),           "Port of redis instance")                          // NOLINT
+    ("continue-fitting",  po::value(&parameters->continue_fitting)->default_value(0),      "1 - continue fitting redis model, 0 - restart")   // NOLINT
+    ("caching-phi-mode",  po::value(&parameters->caching_phi_mode)->default_value("none"), "Cache usage policy: none|batch|iteration")        // NOLINT
+    ("delayed-update",    po::value(&parameters->delayed_update)->default_value(0),        "1 - update n_wt matrix per iter, 0 - per batch")  // NOLINT
+    ("token-begin-index", po::value(&parameters->token_begin_index)->default_value(0),     "Index of token to init/norm from")                // NOLINT
+    ("token-end-index",   po::value(&parameters->token_end_index)->default_value(0),       "Index of token to init/norm to (excluding)")      // NOLINT
+    ("batch-begin-index", po::value(&parameters->batch_begin_index)->default_value(0),     "Index of batch to process from")                  // NOLINT
+    ("batch-end-index",   po::value(&parameters->batch_end_index)->default_value(0),       "Index of batch to process to (excluding)")        // NOLINT
+    ("executor-id",       po::value(&parameters->executor_id)->default_value(-1),          "Unique identifier of the process")                // NOLINT
     ;
 
   po::variables_map variables_map;
@@ -220,9 +230,8 @@ int main(int argc, char* argv[]) {
 
     LOG(INFO) << "Executor " << executor_id << ": start creating matrices";
 
-    bool use_cache = (parameters.cache_phi == 1);
+    bool use_cache = (parameters.caching_phi_mode != CACHING_PHI_MODE_NONE);
     auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, use_cache));
-
     auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics));
 
     int counter = 0;
@@ -272,6 +281,7 @@ int main(int argc, char* argv[]) {
                            batch_indices[thread_id].first,
                            batch_indices[thread_id].second,
                            parameters.num_inner_iters,
+                           parameters.caching_phi_mode,
                            std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(p_wt, p_wt_client)),
                            std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(n_wt, n_wt_client)))
       ));

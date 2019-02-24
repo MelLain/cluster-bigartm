@@ -11,7 +11,7 @@ parser.add_argument('-n', '--num-executor-threads')
 parser.add_argument('-t', '--num-topics')
 parser.add_argument('-i', '--num-inner-iter')
 parser.add_argument('-c', '--continue-fitting')
-parser.add_argument('-p', '--cache-phi')
+parser.add_argument('-p', '--caching-phi-mode')
 
 def ceil(number):
     z = int(number)
@@ -47,13 +47,14 @@ def main():
 	assert batch_indices[0][0] == 0
 	assert batch_indices[-1][-1] == num_batches
 
-	cmd_str = './executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} --vocab-path {} --continue-fitting {} --cache-phi {}'.format(
+	cmd_str = ('./executor_main --num-topics {} --num-inner-iter {} --batches-dir-path {} ' +
+			   '--vocab-path {} --continue-fitting {} --caching-phi-mode {}').format(
     	args['num_topics'],
     	args['num_inner_iter'],
     	args['batches_path'],
     	args['vocab'],
     	args['continue_fitting'],
-    	args['cache_phi'])
+    	args['caching_phi_mode'])
 
 	for executor_id, addr in enumerate(redis_addresses):
 		additional_args = '--redis-ip {} --redis-port {} --num-threads {} '.format(addr[0], addr[1], int(args['num_executor_threads']))
