@@ -38,8 +38,16 @@ void RedisClient::set_value(const std::string& key, const std::string& value) co
   clean_reply();
 }
 
-// ToDo(MelLain):currently getting of non-exist value will cause segfault, and clean_reply is not safe
 std::string RedisClient::get_value(const std::string& key) const {
+  reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "EXISTS %s", key.c_str());
+
+  if (reply_->integer == 0) {
+    clean_reply();
+    throw std::runtime_error("get_value: no such key in redis: " + key);
+  }
+
+  clean_reply();
+
   reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "GET %s", key.c_str());
 
   std::string retval = std::string(reply_->str);

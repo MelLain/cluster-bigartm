@@ -99,10 +99,9 @@ void check_parameters(const Parameters& parameters) {
   }
 
   if (parameters.caching_phi_mode != CACHING_PHI_MODE_NONE &&
-      parameters.caching_phi_mode != CACHING_PHI_MODE_BATCH &&
       parameters.caching_phi_mode != CACHING_PHI_MODE_ITERATION)
   {
-    throw std::runtime_error("caching_phi_mode should be int none|iteration|batch");
+    throw std::runtime_error("caching_phi_mode should be int none|iteration");
   }
 
   if (parameters.delayed_update != 0 && parameters.delayed_update != 1) {
@@ -142,7 +141,7 @@ bool parse_and_print_parameters(int argc, char* argv[], Parameters* parameters) 
     ("redis-ip",          po::value(&parameters->redis_ip)->default_value(""),             "IP of redis instance")                            // NOLINT
     ("redis-port",        po::value(&parameters->redis_port)->default_value(""),           "Port of redis instance")                          // NOLINT
     ("continue-fitting",  po::value(&parameters->continue_fitting)->default_value(0),      "1 - continue fitting redis model, 0 - restart")   // NOLINT
-    ("caching-phi-mode",  po::value(&parameters->caching_phi_mode)->default_value("none"), "Cache usage policy: none|batch|iteration")        // NOLINT
+    ("caching-phi-mode",  po::value(&parameters->caching_phi_mode)->default_value("none"), "Cache usage policy: none|iteration")              // NOLINT
     ("delayed-update",    po::value(&parameters->delayed_update)->default_value(0),        "1 - update n_wt matrix per iter, 0 - per batch")  // NOLINT
     ("token-begin-index", po::value(&parameters->token_begin_index)->default_value(0),     "Index of token to init/norm from")                // NOLINT
     ("token-end-index",   po::value(&parameters->token_end_index)->default_value(0),       "Index of token to init/norm to (excluding)")      // NOLINT
