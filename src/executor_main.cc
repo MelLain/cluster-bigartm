@@ -38,7 +38,7 @@ struct Parameters {
   std::string redis_ip;
   std::string redis_port;
   int continue_fitting;
-  std::string caching_phi_mode;
+  std::string caching_mode;
   int delayed_update;
   int token_begin_index;
   int token_end_index;
@@ -56,7 +56,7 @@ void log_parameters(const Parameters& parameters) {
               << "redis-ip: "          << parameters.redis_ip          << "; "
               << "redis-port: "        << parameters.redis_port        << "; "
               << "continue-fitting: "  << parameters.continue_fitting  << "; "
-              << "caching-phi-mode: "  << parameters.caching_phi_mode  << "; "
+              << "caching-mode: "      << parameters.caching_mode      << "; "
               << "delayed-update: "    << parameters.delayed_update    << "; "
               << "token-begin-index: " << parameters.token_begin_index << "; "
               << "token-end-index: "   << parameters.token_end_index   << "; "
@@ -98,10 +98,12 @@ void check_parameters(const Parameters& parameters) {
     throw std::runtime_error("continue_fitting should be equal to 0 or 1");
   }
 
-  if (parameters.caching_phi_mode != CACHING_PHI_MODE_NONE &&
-      parameters.caching_phi_mode != CACHING_PHI_MODE_ITERATION)
+  if (parameters.caching_mode != CACHING_MODE_NONE &&
+      parameters.caching_mode != CACHING_MODE_PWT &&
+      parameters.caching_mode != CACHING_MODE_NWT &&
+      parameters.caching_mode != CACHING_MODE_ALL)
   {
-    throw std::runtime_error("caching_phi_mode should be int none|iteration");
+    throw std::runtime_error("caching_mode should be in none|pwt|nwt|all");
   }
 
   if (parameters.delayed_update != 0 && parameters.delayed_update != 1) {
@@ -141,7 +143,7 @@ bool parse_and_print_parameters(int argc, char* argv[], Parameters* parameters) 
     ("redis-ip",          po::value(&parameters->redis_ip)->default_value(""),             "IP of redis instance")                            // NOLINT
     ("redis-port",        po::value(&parameters->redis_port)->default_value(""),           "Port of redis instance")                          // NOLINT
     ("continue-fitting",  po::value(&parameters->continue_fitting)->default_value(0),      "1 - continue fitting redis model, 0 - restart")   // NOLINT
-    ("caching-phi-mode",  po::value(&parameters->caching_phi_mode)->default_value("none"), "Cache usage policy: none|iteration")              // NOLINT
+    ("caching-mode",      po::value(&parameters->caching_mode)->default_value("none"),     "Cache usage policy: none|pwt|nwt|all")            // NOLINT
     ("delayed-update",    po::value(&parameters->delayed_update)->default_value(0),        "1 - update n_wt matrix per iter, 0 - per batch")  // NOLINT
     ("token-begin-index", po::value(&parameters->token_begin_index)->default_value(0),     "Index of token to init/norm from")                // NOLINT
     ("token-end-index",   po::value(&parameters->token_end_index)->default_value(0),       "Index of token to init/norm to (excluding)")      // NOLINT
@@ -229,9 +231,20 @@ int main(int argc, char* argv[]) {
 
     LOG(INFO) << "Executor " << executor_id << ": start creating matrices";
 
-    bool use_cache = (parameters.caching_phi_mode != CACHING_PHI_MODE_NONE);
-    auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, use_cache));
-    auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics));
+    PhiMatrixCacheMode pwt_mode = PhiMatrixCacheMode::NONE;
+    PhiMatrixCacheMode nwt_mode = PhiMatrixCacheMode::NONE;
+
+    if (parameters.caching_mode == CACHING_MODE_PWT) {
+      pwt_mode = PhiMatrixCacheMode::READ;
+    } else if (parameters.caching_mode == CACHING_MODE_NWT) {
+      nwt_mode = PhiMatrixCacheMode::WRITE;
+    } else if (parameters.caching_mode == CACHING_MODE_ALL) {
+      pwt_mode = PhiMatrixCacheMode::READ;
+      nwt_mode = PhiMatrixCacheMode::WRITE;
+    }
+
+    auto p_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("pwt"), topics, pwt_mode));
+    auto n_wt = std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(ModelName("nwt"), topics, nwt_mode));
 
     int counter = 0;
     auto zero_vector = std::vector<float>(p_wt->topic_size(), 0.0f);
@@ -280,7 +293,6 @@ int main(int argc, char* argv[]) {
                            batch_indices[thread_id].first,
                            batch_indices[thread_id].second,
                            parameters.num_inner_iters,
-                           parameters.caching_phi_mode,
                            std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(p_wt, p_wt_client)),
                            std::make_shared<RedisPhiMatrixAdapter>(RedisPhiMatrixAdapter(n_wt, n_wt_client)))
       ));

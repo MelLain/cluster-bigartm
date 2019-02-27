@@ -3,8 +3,8 @@
 const std::string START_GLOBAL_START = "0";
 const std::string FINISH_GLOBAL_START = "1";
 
-const std::string START_INITIALIZATION = "2";
-const std::string FINISH_INITIALIZATION = "3";
+const std::string START_PREPARATION = "2";
+const std::string FINISH_PREPARATION = "3";
 
 const std::string START_ITERATION = "4";
 const std::string FINISH_ITERATION = "5";

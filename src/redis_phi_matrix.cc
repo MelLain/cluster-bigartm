@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <memory>
+#include <numeric>
 
 #include "glog/logging.h"
 
@@ -38,7 +39,7 @@ float RedisPhiMatrix::get(std::shared_ptr<RedisClient> redis_client, int token_i
 }
 
 void RedisPhiMatrix::get(std::shared_ptr<RedisClient> redis_client, int token_id, std::vector<float>* buffer) const {
-  if (use_cache_ && cache_.has_key(token_id)) {
+  if (cache_mode_ == PhiMatrixCacheMode::READ && cache_.has_key(token_id)) {
     auto values_ptr = cache_.get(token_id);
     for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
       (*buffer)[topic_id] = (*values_ptr)[topic_id];
@@ -49,7 +50,7 @@ void RedisPhiMatrix::get(std::shared_ptr<RedisClient> redis_client, int token_id
       (*buffer)[topic_id] = values[topic_id];
     }
 
-    if (use_cache_) {
+    if (cache_mode_ == PhiMatrixCacheMode::READ) {
       cache_.set(token_id, std::make_shared<std::vector<float>>(values));
     }
   }
@@ -76,10 +77,24 @@ void RedisPhiMatrix::increase(std::shared_ptr<RedisClient> redis_client,
                               int token_id, const std::vector<float>& increment)
 {
   lock(token_id);
+
   auto key = to_key(token_id);
-  if (!redis_client->increase_values(key, increment)) {
-    LOG(WARNING) << "Update of token data " << key << " has failed" << std::endl;
+  if (cache_mode_ == PhiMatrixCacheMode::WRITE) {
+    if (cache_.has_key(token_id)) {
+      auto values_ptr = cache_.get(token_id);
+
+      for (int topic_id = 0; topic_id < topic_size(); ++topic_id) {
+        (*values_ptr)[topic_id] += increment[topic_id];
+      }
+    } else {
+      cache_.set(token_id, std::make_shared<std::vector<float>>(increment));
+    }
+  } else {
+    if (!redis_client->increase_values(key, increment)) {
+      LOG(WARNING) << "Update of token data " << key << " has failed" << std::endl;
+    }
   }
+
   unlock(token_id);
 }
 
@@ -102,4 +117,34 @@ int RedisPhiMatrix::add_token(std::shared_ptr<RedisClient> redis_client, const T
     redis_client->set_values(to_key(index), values);
   }
   return index;
+}
+
+void RedisPhiMatrix::dump_write_cache(std::shared_ptr<RedisClient> redis_client,
+                                      int token_begin_index,
+                                      int token_end_index)
+{
+  if (cache_mode_ != PhiMatrixCacheMode::WRITE) {
+    return;
+  }
+
+  // randomize loop to minimize risk of collision between executors
+  auto indices = std::make_shared<std::vector<int>>(std::vector<int>(token_end_index - token_begin_index));
+  std::iota(indices->begin(), indices->end(), token_begin_index);
+  std::random_shuffle(indices->begin(), indices->end());
+
+  for (int token_id : *indices) {
+    // No need in lock on token as each thread deal only with own set of tokens
+    auto key = to_key(token_id);
+    if (!cache_.has_key(token_id)) {
+      continue;
+    }
+
+    auto values_ptr = cache_.get(token_id);
+
+    if (!redis_client->increase_values(key, *values_ptr)) {
+      LOG(ERROR) << "Update of token data from cache " << key << " has failed" << std::endl;
+    }
+
+    cache_.erase(token_id);
+  }
 }

@@ -20,8 +20,10 @@ const float kEps = 1e-16f;
 
 const int kDefaultTimeout = 100;
 
-const std::string CACHING_PHI_MODE_NONE = "none";
-const std::string CACHING_PHI_MODE_ITERATION = "iteration";
+const std::string CACHING_MODE_NONE = "none";
+const std::string CACHING_MODE_PWT = "pwt";
+const std::string CACHING_MODE_NWT = "nwt";
+const std::string CACHING_MODE_ALL = "all";
 
 typedef std::unordered_map<std::string, std::vector<double>> Normalizers;
 

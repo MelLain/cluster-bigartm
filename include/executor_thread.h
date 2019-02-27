@@ -26,7 +26,6 @@ class ExecutorThread : boost::noncopyable {
   	                      int batch_begin_index,
   	                      int batch_end_index,
   	                      int num_inner_iters,
-                          const std::string& caching_phi_mode,
   	                      std::shared_ptr<RedisPhiMatrixAdapter> p_wt,
   	                      std::shared_ptr<RedisPhiMatrixAdapter> n_wt)
     : command_key_(command_key)
@@ -39,7 +38,6 @@ class ExecutorThread : boost::noncopyable {
     , batch_begin_index_(batch_begin_index)
     , batch_end_index_(batch_end_index)
     , num_inner_iters_(num_inner_iters)
-    , caching_phi_mode_(caching_phi_mode)
     , p_wt_(p_wt)
     , n_wt_(n_wt)
     , is_stopping_(false)
@@ -76,7 +74,6 @@ bool is_stopping() {
   int batch_begin_index_;
   int batch_end_index_;
   int num_inner_iters_;
-  std::string caching_phi_mode_;
   std::shared_ptr<RedisPhiMatrixAdapter> p_wt_;
   std::shared_ptr<RedisPhiMatrixAdapter> n_wt_;
 
@@ -91,12 +88,15 @@ bool is_stopping() {
   Normalizers find_nt();
   // protocol:
   // 1) wait for START_NORMALIZATION flag
-  // 2) after reaching it compute n_t on tokens from executor range
-  // 3) put results into data slot and set cmd slot to FINISH_NORMALIZATION
-  // 4) wait for new START_NORMALIZATION flag
-  // 5) read total n_t from data slot
-  // 6) proceed final normalization on tokens from executor range
-  // 7) set FINISH_NORMALIZATION flag and return
+  // 2) dump all cached nwt data if using cache
+  // 3) set cmd slot to FINISH_NORMALIZATION
+  // 4) wait for START_NORMALIZATION flag
+  // 5) after reaching it compute n_t on tokens from executor range
+  // 6) put results into data slot and set cmd slot to FINISH_NORMALIZATION
+  // 7) wait for new START_NORMALIZATION flag
+  // 8) read total n_t from data slot
+  // 9) proceed final normalization on tokens from executor range
+  // 10) set FINISH_NORMALIZATION flag and return
   bool normalize_nwt();
 
   void process_e_step(const artm::Batch& batch, Blas* blas, double* perplexity_value);

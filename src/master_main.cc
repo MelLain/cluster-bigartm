@@ -211,16 +211,26 @@ bool check_non_terminated_and_update(std::shared_ptr<RedisClient> redis_client,
 
 // protocol:
 // 1) set everyone START_NORMALIZATION flag
-// 2) wait for everyone to set FINISH_NORMALIZATION flag
-// 3) read results from data slots
-// 4) merge results and put final n_t into data slots
-// 5) set everyone START_NORMALIZATION flag
-// 6) wait for everyone to set FINISH_NORMALIZATION flag
+// 2) wait for everyone to set FINISH_NORMALIZATION flag (executors should dump cached nwt updates if they used cache)
+// 3) set everyone START_NORMALIZATION flag
+// 4) wait for everyone to set FINISH_NORMALIZATION flag
+// 5) read results from data slots
+// 6) merge results and put final n_t into data slots
+// 7) set everyone START_NORMALIZATION flag
+// 8) wait for everyone to set FINISH_NORMALIZATION flag
 bool normalize_nwt(std::shared_ptr<RedisClient> redis_client,
                    const std::vector<std::string>& command_keys,
                    const std::vector<std::string>& data_keys,
                    int num_topics)
 {
+  if (!check_non_terminated_and_update(redis_client, command_keys, START_NORMALIZATION)) {
+    return false;
+  }
+
+  if (!check_finished_or_terminated(redis_client, command_keys, START_NORMALIZATION, FINISH_NORMALIZATION)) {
+    return false;
+  }
+
   if (!check_non_terminated_and_update(redis_client, command_keys, START_NORMALIZATION)) {
     return false;
   }
@@ -363,18 +373,18 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "Master: finish connecting to processors";
     std::cout << "Master: finish connecting to processors" << std::endl;
 
-    LOG(INFO) << "Master: start initialization";
-    std::cout << "Master: start initialization" << std::endl;
+    LOG(INFO) << "Master: start preparation";
+    std::cout << "Master: start preparation" << std::endl;
 
-    ok = check_non_terminated_and_update(redis_client, executor_command_keys, START_INITIALIZATION);
+    ok = check_non_terminated_and_update(redis_client, executor_command_keys, START_PREPARATION);
     if (!ok) { throw std::runtime_error("Master: step 1 start, got termination status"); }
 
     ok = check_finished_or_terminated(redis_client, executor_command_keys,
-                                      START_INITIALIZATION, FINISH_INITIALIZATION);
+                                      START_PREPARATION, FINISH_PREPARATION);
     if (!ok) { throw std::runtime_error("Master: step 1 finish, got termination status"); }
 
-    LOG(INFO) << "Master: finish initialization";
-    std::cout << "Master: finish initialization" << std::endl;
+    LOG(INFO) << "Master: finish preparation";
+    std::cout << "Master: finish preparation" << std::endl;
 
     double n = 0.0;
     for (const auto& key : executor_data_keys) {

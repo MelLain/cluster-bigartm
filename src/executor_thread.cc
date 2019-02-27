@@ -83,9 +83,22 @@ bool ExecutorThread::normalize_nwt() {
   }
 
   // It's necessary to clear cache after first sync point following end of iterations
-  if (caching_phi_mode_ == CACHING_PHI_MODE_ITERATION) {
-    LOG(INFO) << "Executor thread " << command_key_ << ": clear executor phi cache";
-    p_wt_->clear_cache();
+  if (p_wt_->cache_mode() == PhiMatrixCacheMode::READ) {
+    LOG(INFO) << "Executor thread " << command_key_ << ": clear executor pwt cache";
+    p_wt_->clear_read_cache();
+  }
+
+  if (n_wt_->cache_mode() == PhiMatrixCacheMode::WRITE) {
+    LOG(INFO) << "Executor thread " << command_key_ << ": dump executor nwt cache";
+    n_wt_->dump_write_cache(token_begin_index_, token_end_index_);
+  }
+
+  if (!check_non_terminated_and_update(FINISH_NORMALIZATION)) {
+    return false;
+  }
+
+  if(!wait_for_flag(START_NORMALIZATION)) {
+    return false;
   }
 
   LOG(INFO) << "Executor thread " << command_key_ << ": start normalize_nwt";
@@ -166,7 +179,7 @@ void ExecutorThread::thread_function() {
       throw std::runtime_error("Step 0, got termination command");
     };
 
-    if (!wait_for_flag(START_INITIALIZATION)) {
+    if (!wait_for_flag(START_PREPARATION)) {
       throw std::runtime_error("Step 1 start, got termination command");
     };
 
@@ -194,7 +207,7 @@ void ExecutorThread::thread_function() {
     LOG(INFO) << "Executor thread " << command_key_ << ": finish preparations, total number of slots: "
               << n << " from " << num_batches_processed << " batches";
 
-    if (!check_non_terminated_and_update(FINISH_INITIALIZATION)) {
+    if (!check_non_terminated_and_update(FINISH_PREPARATION)) {
       throw std::runtime_error("Step 1 finish, got termination command");
     }
 

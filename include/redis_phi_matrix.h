@@ -14,6 +14,8 @@
 #include "thread_safe_collection_holder.h"
 #include "redis_client.h"
 
+enum PhiMatrixCacheMode { NONE, READ, WRITE };
+
 class SpinLock : boost::noncopyable {
  public:
   SpinLock() : state_(kUnlocked) { }
@@ -32,11 +34,11 @@ class RedisPhiMatrix : boost::noncopyable {
 
   RedisPhiMatrix(const ModelName& model_name,
   	             const std::vector<std::string>& topic_name,
-                 bool use_cache = false)
+                 PhiMatrixCacheMode cache_mode = PhiMatrixCacheMode::NONE)
       : model_name_(model_name)
       , topic_name_(topic_name)
       , token_collection_()
-      , use_cache_(use_cache)
+      , cache_mode_(cache_mode)
       , cache_() { }
 
   int token_size() const;
@@ -72,22 +74,22 @@ class RedisPhiMatrix : boost::noncopyable {
   int add_token(std::shared_ptr<RedisClient> redis_client,
                 const Token& token, bool flag, const std::vector<float>& values);
 
-  void clear_cache() {
+  void clear_read_cache(std::shared_ptr<RedisClient> redis_client) {
+    if (cache_mode_ == PhiMatrixCacheMode::READ) {
+      cache_.clear();
+    }
+  }
+
+  void dump_write_cache(std::shared_ptr<RedisClient> redis_client, int token_begin_index, int token_end_index);
+
+  ~RedisPhiMatrix() {
+    token_collection_.clear();
+    spin_locks_.clear();
     cache_.clear();
   }
 
-  void clear() {
-    token_collection_.clear();
-    spin_locks_.clear();
-    clear_cache();
-  };
-
-  ~RedisPhiMatrix() {
-    clear();
-  }
-
-  bool use_cache() const {
-    return use_cache_;
+  PhiMatrixCacheMode cache_mode() const {
+    return cache_mode_;
   }
 
  private:
@@ -100,7 +102,7 @@ class RedisPhiMatrix : boost::noncopyable {
   std::vector<std::string> topic_name_;
   TokenCollection token_collection_;
   std::vector<std::shared_ptr<SpinLock> > spin_locks_;
-  bool use_cache_;
+  PhiMatrixCacheMode cache_mode_;
   mutable ThreadSafeCollectionHolder<int, std::vector<float>> cache_;
 };
 
@@ -113,8 +115,8 @@ class RedisPhiMatrixAdapter {
   RedisPhiMatrixAdapter(std::shared_ptr<RedisClient> redis_client,
                         const ModelName& model_name,
                         const std::vector<std::string>& topic_name,
-                        bool use_cache = false)
-      : phi_matrix_(std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(model_name, topic_name, use_cache)))
+                        PhiMatrixCacheMode cache_mode = PhiMatrixCacheMode::NONE)
+      : phi_matrix_(std::shared_ptr<RedisPhiMatrix>(new RedisPhiMatrix(model_name, topic_name, cache_mode)))
       , redis_client_(redis_client) { }
 
   int token_size() const { return phi_matrix_->token_size(); }
@@ -162,10 +164,12 @@ class RedisPhiMatrixAdapter {
     return phi_matrix_->add_token(redis_client_, token, flag, values);
   }
 
-  void clear_cache() { phi_matrix_->clear_cache(); }
-  void clear() { phi_matrix_->clear(); };
-  bool use_cache() const { return phi_matrix_->use_cache(); }
-  
+  void clear_read_cache() { phi_matrix_->clear_read_cache(redis_client_); }
+  void dump_write_cache(int token_begin_index, int token_end_index) {
+    phi_matrix_->dump_write_cache(redis_client_, token_begin_index, token_end_index);
+  }
+
+  PhiMatrixCacheMode cache_mode() const { return phi_matrix_->cache_mode(); }
 
  private:
   std::shared_ptr<RedisPhiMatrix> phi_matrix_;
