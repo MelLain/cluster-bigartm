@@ -39,6 +39,15 @@ void RedisClient::set_value(const std::string& key, const std::string& value) co
 }
 
 std::string RedisClient::get_value(const std::string& key) const {
+  reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "EXISTS %s", key.c_str());
+
+  if (reply_->integer == 0) {
+    clean_reply();
+    throw std::runtime_error("get_value: no such key in redis: " + key);
+  }
+
+  clean_reply();
+
   reply_ = (redisReply*) HiredisCommand<>::Command(context_, key.c_str(), "GET %s", key.c_str());
 
   std::string retval = std::string(reply_->str);
@@ -105,6 +114,6 @@ bool RedisClient::increase_values(const std::string& key, const std::vector<floa
 
   reply_ = (redisReply*) HiredisCommand<>::Command(context_, "EXEC", key.c_str());
 
-  clean_reply();  // ToDo(mel-lain): check memory leaks in this place
+  clean_reply();  // ToDo(MelLain): check memory leaks in this place
   return true;
 }

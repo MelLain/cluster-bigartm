@@ -27,12 +27,12 @@ typedef void blas_saxpy_type(const int size, const float alpha,
                              float *y, const int ystride);
 
 typedef void blas_scsr2csc_type(int m, int n, int nnz,
-                            const float *csr_val, const int* csr_row_ptr, const int *csr_col_ind,
-                                  float *csc_val,       int* csc_row_ind,       int* csc_col_ptr);
+                                const float *csr_val, const int* csr_row_ptr, const int *csr_col_ind,
+                                float *csc_val, int* csc_row_ind, int* csc_col_ptr);
 
 #define CATCH_BIG_ALLOCATION(no_rows, no_cols)                                      \
 catch (...) {                                                                       \
-  std::stringstream ss;                                                                  \
+  std::stringstream ss;                                                             \
   ss << "no_rows_ = " << no_rows << ", no_columns_ = " << no_cols << ". "           \
      << boost::current_exception_diagnostic_information();                          \
   throw std::runtime_error(ss.str());                                               \
@@ -40,7 +40,7 @@ catch (...) {                                                                   
 
 class Blas {
  public:
-  virtual ~Blas() {}
+  virtual ~Blas() { }
   virtual bool is_loaded() = 0;
   blas_sgemm_type* sgemm;
   blas_saxpy_type* saxpy;
@@ -165,8 +165,8 @@ template<typename T>
 class LocalThetaMatrix : public DenseMatrix<T> {
  public:
   explicit LocalThetaMatrix(int num_topics, int num_items)
-      : DenseMatrix<T>(num_topics, num_items, /* store_by_rows = */ false) {}
-  virtual ~LocalThetaMatrix() {}
+      : DenseMatrix<T>(num_topics, num_items, /* store_by_rows = */ false) { }
+  virtual ~LocalThetaMatrix() { }
   int num_topics() const { return this->no_rows(); }
   int num_items() const { return this->no_columns(); }
 };
@@ -175,8 +175,8 @@ template<typename T>
 class LocalPhiMatrix : public DenseMatrix<T> {
  public:
   explicit LocalPhiMatrix(int num_tokens, int num_topics)
-      : DenseMatrix<T>(num_tokens, num_topics, /* store_by_rows = */ true) {}
-  virtual ~LocalPhiMatrix() {}
+      : DenseMatrix<T>(num_tokens, num_topics, /* store_by_rows = */ true) { }
+  virtual ~LocalPhiMatrix() { }
   int num_tokens() const { return this->no_rows(); }
   int num_topics() const { return this->no_columns(); }
 };
@@ -233,7 +233,8 @@ class CsrMatrix {
 template<typename T>
 void AssignDenseMatrixByProduct(const DenseMatrix<T>& first_matrix,
                                 const DenseMatrix<T>& second_matrix,
-                                DenseMatrix<T>* result_matrix) {
+                                DenseMatrix<T>* result_matrix)
+{
   assert(result_matrix->is_equal_size(first_matrix));
   assert(result_matrix->is_equal_size(second_matrix));
 
@@ -249,7 +250,8 @@ void AssignDenseMatrixByProduct(const DenseMatrix<T>& first_matrix,
 template<typename T>
 void AssignDenseMatrixByDivision(const DenseMatrix<T>& first_matrix,
                                  const DenseMatrix<T>& second_matrix,
-                                 DenseMatrix<T>* result_matrix) {
+                                 DenseMatrix<T>* result_matrix)
+{
   assert(result_matrix->is_equal_size(first_matrix));
   assert(result_matrix->is_equal_size(second_matrix));
 

@@ -12,7 +12,7 @@ using namespace RedisCluster;
 
 class RedisClient {
  public:
-  RedisClient(const std::string& ip, int port, int timeout)
+  RedisClient(const std::string& ip, int port, int timeout = kDefaultTimeout)
       : timeout_(timeout)
       , reply_(nullptr)
   {

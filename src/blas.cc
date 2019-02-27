@@ -13,7 +13,7 @@ namespace {
 
 class Index {
  public:
-  Index(int order, int trans, int ld) : order_(order), trans_(trans), ld_(ld) {}
+  Index(int order, int trans, int ld) : order_(order), trans_(trans), ld_(ld) { }
   int operator()(int i, int j) {
     if (trans_ == Blas::Trans) { int tmp = i; i = j; j = tmp; }  // transpose
     return (order_ == Blas::RowMajor) ? (i * ld_ + j) : (i + ld_ * j);
@@ -32,8 +32,9 @@ float builtin_sdot(int size, const float *x, int xstride, const float *y, int ys
 }
 
 void builtin_saxpy(const int size, const float alpha,
-  const float *x, const int xstride,
-  float *y, const int ystride) {
+                   const float *x, const int xstride,
+                   float *y, const int ystride)
+{
   for (int i = 0; i < size; ++i) {
     y[i * ystride] += alpha * x[i * xstride];
   }
@@ -47,8 +48,9 @@ void builtin_saxpy(const int size, const float alpha,
 // - int*   _ind is an array of length NNZ (represents column indices of non-zero values of the matrix)
 // All indices are 0-based.
 void builtin_scsr2csc(int m, int n, int nnz,
-  const float *csr_val, const int* csr_row_ptr, const int *csr_col_ind,
-  float *csc_val, int* csc_row_ind, int* csc_col_ptr) {
+                      const float *csr_val, const int* csr_row_ptr, const int *csr_col_ind,
+                      float *csc_val, int* csc_row_ind, int* csc_col_ptr)
+{
   if (nnz <= 0) return;
   std::vector<std::tuple<int, int, float>> coo_row_ind(nnz);
   for (int i = 0; i < m; ++i) {
@@ -76,12 +78,13 @@ void builtin_scsr2csc(int m, int n, int nnz,
 
 
 void builtin_sgemm(int order, const int transa, const int transb,
-  const int m, const int n, const int k,
-  const float alpha,
-  const float * a, const int lda,
-  const float * b, const int ldb,
-  const float beta,
-  float * c, const int ldc) {
+                   const int m, const int n, const int k,
+                   const float alpha,
+                   const float * a, const int lda,
+                   const float * b, const int ldb,
+                   const float beta,
+                   float * c, const int ldc)
+{
   Index ia(order, transa, lda);
   Index ib(order, transb, ldb);
   Index ic(order, Blas::NoTrans, ldc);

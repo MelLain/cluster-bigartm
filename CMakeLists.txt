@@ -16,7 +16,13 @@ set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
 
-find_package(Boost REQUIRED) 
+find_package(Boost COMPONENTS
+  filesystem
+  thread
+  system
+  program_options
+REQUIRED)
+
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 find_package(glog 0.3.5 REQUIRED)
@@ -35,15 +41,12 @@ set(SOURCE_LIB
   src/redis_phi_matrix.cc
   src/token.cc
   src/redis_client.cc
+  src/executor_thread.cc
 )
 
 set(CMAKE_CXX_STANDARD 11)
 
 set(CXX_STANDARD_REQUIRED)
-
-set(CMAKE_CXX_FLAGS
-  "-lboost_filesystem -lboost_system -lboost_program_options"
-)
 
 add_library(cluster_bigartm_lib STATIC ${SOURCE_LIB})
 

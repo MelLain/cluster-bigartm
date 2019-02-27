@@ -3,7 +3,7 @@
 #include "processor_helpers.h"
 
 namespace {
-  void NormalizeTheta(int item_index, int inner_iter, int topics_size, const float* n_td) {
+  void normalize_theta(int item_index, int inner_iter, int topics_size, const float* n_td) {
     float sum = 0.0f;
     for (int topic_index = 0; topic_index < topics_size; ++topic_index) {
       float val = n_td[topic_index];
@@ -15,7 +15,7 @@ namespace {
     float sum_inv = sum > 0.0f ? (1.0f / sum) : 0.0f;
     for (int topic_index = 0; topic_index < topics_size; ++topic_index) {
       float val = sum_inv * (n_td[topic_index]);
-      if (val < kProcessorEps) {
+      if (val < kEps) {
         val = 0.0f;
       }
 
@@ -24,7 +24,7 @@ namespace {
   }
 }
 
-std::shared_ptr<LocalThetaMatrix<float>> ProcessorHelpers::InitializeTheta(int topic_size, const artm::Batch& batch) {
+std::shared_ptr<LocalThetaMatrix<float>> ProcessorHelpers::initialize_theta(int topic_size, const artm::Batch& batch) {
   auto Theta = std::make_shared<LocalThetaMatrix<float>>(topic_size, batch.item_size());
 
   Theta->InitializeZeros();
@@ -37,7 +37,7 @@ std::shared_ptr<LocalThetaMatrix<float>> ProcessorHelpers::InitializeTheta(int t
   return Theta;
 }
 
-std::shared_ptr<CsrMatrix<float>> ProcessorHelpers::InitializeSparseNdw(const artm::Batch& batch) {
+std::shared_ptr<CsrMatrix<float>> ProcessorHelpers::initialize_sparse_ndw(const artm::Batch& batch) {
   std::vector<float> n_dw_val;
   std::vector<int> n_dw_row_ptr;
   std::vector<int> n_dw_col_ind;
@@ -59,28 +59,32 @@ std::shared_ptr<CsrMatrix<float>> ProcessorHelpers::InitializeSparseNdw(const ar
   return std::make_shared<CsrMatrix<float>>(batch.token_size(), &n_dw_val, &n_dw_row_ptr, &n_dw_col_ind);
 }
 
-void ProcessorHelpers::FindBatchTokenIds(const artm::Batch& batch, const PhiMatrix& phi_matrix, std::vector<int>* token_id) {
+void ProcessorHelpers::find_batch_token_ids(const artm::Batch& batch,
+                                            const RedisPhiMatrixAdapter& phi_matrix,
+                                            std::vector<int>* token_id)
+{
   token_id->resize(batch.token_size(), -1);
   for (int token_index = 0; token_index < batch.token_size(); ++token_index) {
     token_id->at(token_index) = phi_matrix.token_index(Token(batch.class_id(token_index), batch.token(token_index)));
   }
 }
 
-void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
-                                                    const CsrMatrix<float>& sparse_ndw,
-                                                    const PhiMatrix& p_wt,
-                                                    LocalThetaMatrix<float>* theta_matrix,
-                                                    NwtWriteAdapter* nwt_writer,
-                                                    Blas* blas,
-                                                    int num_inner_iters,
-                                                    double* perplexity_value) {
+void ProcessorHelpers::infer_theta_and_update_nwt_sparse(const artm::Batch& batch,
+                                                         const CsrMatrix<float>& sparse_ndw,
+                                                         const RedisPhiMatrixAdapter& p_wt,
+                                                         LocalThetaMatrix<float>* theta_matrix,
+                                                         NwtWriteAdapter* nwt_writer,
+                                                         Blas* blas,
+                                                         int num_inner_iters,
+                                                         double* perplexity_value)
+{
   LocalThetaMatrix<float> n_td(theta_matrix->num_topics(), theta_matrix->num_items());
   const int num_topics = p_wt.topic_size();
   const int docs_count = theta_matrix->num_items();
   const int tokens_count = batch.token_size();
 
   std::vector<int> token_id;
-  ProcessorHelpers::FindBatchTokenIds(batch, p_wt, &token_id);
+  ProcessorHelpers::find_batch_token_ids(batch, p_wt, &token_id);
 
   int max_local_token_size = 0;  // find the longest document from the batch
   for (int d = 0; d < docs_count; ++d) {
@@ -103,7 +107,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
     bool item_has_tokens = false;
     for (int i = begin_index; i < end_index; ++i) {
       int w = sparse_ndw.col_ind()[i];
-      if (token_id[w] == PhiMatrix::kUndefIndex) {
+      if (token_id[w] == RedisPhiMatrix::kUndefIndex) {
         continue;
       }
       item_has_tokens = true;
@@ -144,7 +148,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
         theta_ptr[k] *= ntd_ptr[k];
       }
 
-      NormalizeTheta(d, inner_iter, num_topics, theta_ptr);
+      normalize_theta(d, inner_iter, num_topics, theta_ptr);
     }
   }
 
@@ -153,7 +157,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
   }
 
   std::vector<int> token_nwt_id;
-  ProcessorHelpers::FindBatchTokenIds(batch, *nwt_writer->n_wt(), &token_nwt_id);
+  ProcessorHelpers::find_batch_token_ids(batch, *nwt_writer->n_wt(), &token_nwt_id);
 
   CsrMatrix<float> sparse_nwd(sparse_ndw);
   sparse_nwd.Transpose(blas);
@@ -174,7 +178,7 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
     for (int i = sparse_nwd.row_ptr()[w]; i < sparse_nwd.row_ptr()[w + 1]; ++i) {
       int d = sparse_nwd.col_ind()[i];
       float p_wd_val = blas->sdot(num_topics, &p_wt_local[0], 1, &(*theta_matrix)(0, d), 1);  // NOLINT
-      if (p_wd_val < kProcessorEps) {
+      if (p_wd_val < kEps) {
         continue;
       }
       blas->saxpy(num_topics, sparse_nwd.val()[i] / p_wd_val,
@@ -190,6 +194,6 @@ void ProcessorHelpers::InferThetaAndUpdateNwtSparse(const artm::Batch& batch,
       n_wt_local[topic_index] = 0.0f;
     }
 
-    nwt_writer->Store(token_nwt_id[w], values);
+    nwt_writer->store(token_nwt_id[w], values);
   }
 }

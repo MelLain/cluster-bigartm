@@ -20,9 +20,9 @@ class Helpers {
   // the method is used to initialize entries in the phi matrix.
   // For unit-tests it is important that such initialization is deterministic
   // (depends only on the keyword and class_id of the token.
-  static std::vector<float> GenerateRandomVector(int size, size_t seed);
-  static std::vector<float> GenerateRandomVector(int size, const Token& token, int seed = -1);
+  static std::vector<float> generate_random_vector(int size, size_t seed);
+  static std::vector<float> generate_random_vector(int size, const Token& token, int seed = -1);
 
-  static void LoadBatch(const std::string& full_filename, artm::Batch* batch);
-  static long GetPeakMemoryKb();
+  static void load_batch(const std::string& full_filename, artm::Batch* batch);
+  static long get_peak_memory_kb();
 };
